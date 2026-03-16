@@ -34,8 +34,8 @@ export default function Upload({ settings }) {
         <p className="eyebrow">Drop a dataset and go</p>
         <h2>Upload data</h2>
         <p>
-          The pipeline will infer the target column, clean the dataset, evaluate multiple models, and produce a ranked
-          report automatically.
+          The pipeline will infer the target column, decide whether the dataset is tabular, text-heavy, or time-series,
+          then clean it, evaluate multiple models, and produce a ranked report automatically.
         </p>
       </section>
 
@@ -56,8 +56,8 @@ export default function Upload({ settings }) {
             <strong>{settings.provider || "none"}</strong>
           </div>
           <div className="meta-card">
-            <span>Primary model</span>
-            <strong>{settings.model || "not set"}</strong>
+            <span>Primary model ref</span>
+            <strong>{settings.primary_model_ref || "not set"}</strong>
           </div>
         </div>
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from contextlib import asynccontextmanager
 import json
 import uuid
 from pathlib import Path
@@ -18,12 +19,21 @@ from .jobs.queue import JobQueue
 from .jobs.state import JobStateManager
 from .modules.recommender import provider_catalog
 from .orchestrator import Orchestrator
+from .utils.agent_routing import model_chain, normalize_agent_settings
 from .utils.helpers import read_json_file
 from .utils.storage import save_upload
 from .utils.validators import validate_upload
 
 
-app = FastAPI(title="ML Pipeline Agent", version="0.1.0")
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    ensure_directories()
+    database.init_database()
+    state_manager.bootstrap_from_database(database.list_jobs(limit=200))
+    yield
+
+
+app = FastAPI(title="ML Pipeline Agent", version="0.2.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -35,13 +45,6 @@ app.add_middleware(
 state_manager = JobStateManager()
 orchestrator = Orchestrator(state_manager)
 job_queue = JobQueue(orchestrator.process_job)
-
-
-@app.on_event("startup")
-async def startup_event() -> None:
-    ensure_directories()
-    database.init_database()
-    state_manager.bootstrap_from_database(database.list_jobs(limit=200))
 
 
 @app.get("/api/health")
@@ -65,6 +68,8 @@ def available_models() -> dict[str, Any]:
             "KNN",
             "Naive Bayes",
             "Voting Ensemble",
+            "TF-IDF Text Pipelines",
+            "Lag-based Time-Series Forecasting",
         ],
     }
 
@@ -112,12 +117,24 @@ async def submit_job(
     file: UploadFile = File(...),
     provider: str = Form("ollama"),
     model: str = Form(""),
+    settings_json: str = Form("{}"),
 ) -> JSONResponse:
     validate_upload(file.filename or "", SUPPORTED_FILE_EXTENSIONS)
     content = await file.read()
     job_id = uuid.uuid4().hex[:12]
     upload_path = save_upload(job_id, file.filename or "dataset.csv", content)
-    database.create_job(job_id, file.filename or "dataset.csv", str(upload_path), provider, model)
+    try:
+        raw_settings = json.loads(settings_json or "{}")
+    except json.JSONDecodeError:
+        raw_settings = {}
+    normalized_settings = normalize_agent_settings({**raw_settings, "provider": provider, "model": model})
+    database.create_job(
+        job_id,
+        file.filename or "dataset.csv",
+        str(upload_path),
+        normalized_settings["provider"],
+        normalized_settings["model"],
+    )
     state_manager.set_state(job_id, {"job_id": job_id, "stage": "queued", "progress": 0, "message": "Job queued"})
     job_queue.enqueue(job_id, str(upload_path))
     return JSONResponse({"job_id": job_id, "status": "queued"})
@@ -178,13 +195,14 @@ def download_cleaned_data(job_id: str) -> FileResponse:
 
 @app.get("/api/agent/providers")
 def get_agent_providers() -> dict[str, Any]:
-    return {"providers": provider_catalog()}
+    return {"providers": provider_catalog(), "routing_style": "openclaw-like provider/model refs with fallback chain"}
 
 
 async def _list_remote_models(settings: dict[str, Any]) -> list[str]:
-    provider = settings.get("provider", "")
-    base_url = settings.get("base_url", "")
-    api_key = settings.get("api_key", "")
+    normalized = normalize_agent_settings(settings)
+    provider = normalized.get("provider", "")
+    base_url = normalized.get("base_url", "")
+    api_key = normalized.get("api_key", "")
     headers: dict[str, str] = {"Authorization": f"Bearer {api_key}"} if api_key else {}
 
     async with httpx.AsyncClient(timeout=10.0) as client:
@@ -206,10 +224,15 @@ async def _list_remote_models(settings: dict[str, Any]) -> list[str]:
 @app.post("/api/agent/models")
 async def get_agent_models(payload: dict[str, Any]) -> dict[str, Any]:
     try:
-        models = await _list_remote_models(payload)
+        normalized = normalize_agent_settings(payload)
+        models = await _list_remote_models(normalized)
     except Exception as exc:
         return {"models": [], "error": str(exc)}
-    return {"models": models}
+    return {
+        "models": models,
+        "model_refs": [f"{normalized['provider']}/{model_name}" for model_name in models],
+        "normalized": normalized,
+    }
 
 
 def _rule_based_console_response(command: str, job_id: str | None) -> str:
@@ -247,46 +270,55 @@ def _rule_based_console_response(command: str, job_id: str | None) -> str:
 
 
 async def _dispatch_provider_command(command: str, settings: dict[str, Any]) -> str:
-    provider = settings.get("provider", "")
-    auth_mode = settings.get("auth_mode", "local")
-    base_url = settings.get("base_url", "")
-    api_key = settings.get("api_key", "")
-    model = settings.get("model", "")
-
+    normalized = normalize_agent_settings(settings)
+    auth_mode = normalized.get("auth_mode", "local")
     if auth_mode == "browser_login":
-        return "Browser-login mode is represented in the selector, but this MVP uses local or API-key-backed adapters for execution."
+        return "Browser-login mode is represented in the selector, but execution currently uses local or API-key-backed routes."
 
-    headers: dict[str, str] = {"Authorization": f"Bearer {api_key}"} if api_key else {}
     async with httpx.AsyncClient(timeout=30.0) as client:
-        if provider == "ollama":
-            response = await client.post(
-                f"{base_url.rstrip('/')}/api/chat",
-                json={
-                    "model": model or "llama3.2",
-                    "messages": [{"role": "user", "content": command}],
-                    "stream": False,
-                },
-            )
-            response.raise_for_status()
-            payload = response.json()
-            return payload.get("message", {}).get("content", "")
+        for route in model_chain(normalized):
+            provider = route["provider"]
+            model = route["model"]
+            if not model:
+                continue
+            base_url = route["base_url"]
+            headers: dict[str, str] = {"Authorization": f"Bearer {normalized['api_key']}"} if normalized.get("api_key") else {}
+            try:
+                if provider == "ollama":
+                    response = await client.post(
+                        f"{base_url.rstrip('/')}/api/chat",
+                        json={
+                            "model": model,
+                            "messages": [{"role": "user", "content": command}],
+                            "stream": False,
+                        },
+                    )
+                    response.raise_for_status()
+                    payload = response.json()
+                    content = payload.get("message", {}).get("content", "")
+                    if content:
+                        return f"[{route['ref']}]\n{content}"
 
-        if provider in {"lmstudio", "openai_compatible", "openai"}:
-            url = f"{base_url.rstrip('/')}/chat/completions" if not base_url.endswith("/v1") else f"{base_url}/chat/completions"
-            response = await client.post(
-                url,
-                headers=headers,
-                json={
-                    "model": model,
-                    "messages": [{"role": "user", "content": command}],
-                    "temperature": 0.2,
-                },
-            )
-            response.raise_for_status()
-            payload = response.json()
-            choices = payload.get("choices", [])
-            if choices:
-                return choices[0].get("message", {}).get("content", "")
+                if provider in {"lmstudio", "openai_compatible", "openai"}:
+                    url = f"{base_url.rstrip('/')}/chat/completions" if not base_url.endswith("/v1") else f"{base_url}/chat/completions"
+                    response = await client.post(
+                        url,
+                        headers=headers,
+                        json={
+                            "model": model,
+                            "messages": [{"role": "user", "content": command}],
+                            "temperature": 0.2,
+                        },
+                    )
+                    response.raise_for_status()
+                    payload = response.json()
+                    choices = payload.get("choices", [])
+                    if choices:
+                        content = choices[0].get("message", {}).get("content", "")
+                        if content:
+                            return f"[{route['ref']}]\n{content}"
+            except Exception:
+                continue
     return ""
 
 

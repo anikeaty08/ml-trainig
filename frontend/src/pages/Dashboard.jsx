@@ -12,8 +12,9 @@ export default function Dashboard({ jobs, availableModels, settings, onSettingsC
           <p className="eyebrow">Upload raw data, let the system take over</p>
           <h2>Autonomous pipeline for messy datasets</h2>
           <p>
-            No login, no target-column questionnaire, and no cloud dependency by default. Upload a CSV and the app
-            will infer the target, clean the data, train multiple models, compare them, and export everything.
+            No login, no target-column questionnaire, and no cloud dependency by default. Upload tabular, text, or
+            time-series CSV data and the app will infer the target, clean the data, train multiple models, compare
+            them, and export everything.
           </p>
         </div>
         <div className="cta-row">

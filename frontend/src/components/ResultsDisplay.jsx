@@ -4,6 +4,7 @@ export default function ResultsDisplay({ jobId, result }) {
   const comparison = result?.comparison_json || [];
   const summary = result?.summary_json || {};
   const metrics = result?.metrics_json || {};
+  const detection = summary.detection || {};
 
   return (
     <div className="stack">
@@ -15,6 +16,9 @@ export default function ResultsDisplay({ jobId, result }) {
             {Object.entries(metrics)
               .map(([key, value]) => `${key}: ${value}`)
               .join(" | ")}
+          </p>
+          <p>
+            Dataset type: {detection.dataset_type || result.data_type} | Problem type: {detection.problem_type || result.problem_type}
           </p>
         </div>
         <div className="download-grid">

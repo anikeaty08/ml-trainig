@@ -41,7 +41,8 @@ export const api = {
     const formData = new FormData();
     formData.append("file", file);
     formData.append("provider", settings.provider || "");
-    formData.append("model", settings.model || "");
+    formData.append("model", settings.primary_model_ref || settings.model || "");
+    formData.append("settings_json", JSON.stringify(settings || {}));
     return request("/api/jobs/submit", {
       method: "POST",
       body: formData

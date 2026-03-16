@@ -240,6 +240,20 @@ select {
   font-family: "Cascadia Mono", "Consolas", monospace;
 }
 
+.route-preview {
+  margin: 0 0 1rem;
+  padding: 0.9rem 1rem;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid var(--line);
+}
+
+.route-preview p {
+  margin: 0.35rem 0 0;
+  color: var(--muted);
+  word-break: break-word;
+}
+
 .terminal-output {
   min-height: 120px;
   white-space: pre-wrap;

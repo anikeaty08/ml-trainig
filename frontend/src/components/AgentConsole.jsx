@@ -2,6 +2,25 @@ import { useMemo, useState } from "react";
 
 import { api } from "../services/api";
 
+function applyPrimaryModelRef(settings, modelRef) {
+  const normalized = (modelRef || "").trim();
+  if (normalized.includes("/")) {
+    const [provider, model] = normalized.split("/", 2);
+    return {
+      ...settings,
+      provider,
+      model,
+      primary_model_ref: normalized
+    };
+  }
+
+  return {
+    ...settings,
+    model: normalized,
+    primary_model_ref: normalized ? `${settings.provider}/${normalized}` : ""
+  };
+}
+
 export default function AgentConsole({ currentJobId, settings, onSettingsChange, providerCatalog }) {
   const [availableModels, setAvailableModels] = useState([]);
   const [command, setCommand] = useState("help");
@@ -17,9 +36,11 @@ export default function AgentConsole({ currentJobId, settings, onSettingsChange,
     setLoading(true);
     try {
       const payload = await api.getRemoteModels(settings);
-      setAvailableModels(payload.models || []);
+      setAvailableModels(payload.model_refs || payload.models || []);
       if (payload.error) {
         setResponse(payload.error);
+      } else if ((payload.model_refs || []).length) {
+        setResponse(`Resolved ${payload.model_refs.length} models for ${payload.normalized?.provider || settings.provider}.`);
       }
     } catch (error) {
       setResponse(error.message);
@@ -67,7 +88,10 @@ export default function AgentConsole({ currentJobId, settings, onSettingsChange,
                 ...settings,
                 provider: event.target.value,
                 base_url:
-                  providerCatalog.find((item) => item.id === event.target.value)?.default_base_url || settings.base_url
+                  providerCatalog.find((item) => item.id === event.target.value)?.default_base_url || settings.base_url,
+                primary_model_ref: settings.primary_model_ref
+                  ? settings.primary_model_ref.replace(/^[^/]+/, event.target.value)
+                  : settings.primary_model_ref
               })
             }
           >
@@ -100,10 +124,10 @@ export default function AgentConsole({ currentJobId, settings, onSettingsChange,
           />
         </label>
         <label>
-          Primary model
+          Primary model ref
           <input
-            value={settings.model}
-            onChange={(event) => onSettingsChange({ ...settings, model: event.target.value })}
+            value={settings.primary_model_ref || ""}
+            onChange={(event) => onSettingsChange(applyPrimaryModelRef(settings, event.target.value))}
             placeholder="provider/model"
             list="remote-models"
           />
@@ -114,10 +138,16 @@ export default function AgentConsole({ currentJobId, settings, onSettingsChange,
           </datalist>
         </label>
         <label>
-          Fallback models
+          Fallback model refs
           <input
-            value={settings.fallback_models}
-            onChange={(event) => onSettingsChange({ ...settings, fallback_models: event.target.value })}
+            value={settings.fallback_model_refs || settings.fallback_models || ""}
+            onChange={(event) =>
+              onSettingsChange({
+                ...settings,
+                fallback_model_refs: event.target.value,
+                fallback_models: event.target.value
+              })
+            }
             placeholder="ollama/qwen2.5, openai/gpt-4.1-mini"
           />
         </label>
@@ -130,6 +160,23 @@ export default function AgentConsole({ currentJobId, settings, onSettingsChange,
             placeholder="Optional"
           />
         </label>
+        <label>
+          Browser session hint
+          <input
+            value={settings.browser_session_hint || ""}
+            onChange={(event) => onSettingsChange({ ...settings, browser_session_hint: event.target.value })}
+            placeholder="Optional note for browser-login flow"
+          />
+        </label>
+      </div>
+
+      <div className="route-preview">
+        <strong>Route chain</strong>
+        <p>
+          {[settings.primary_model_ref, ...(settings.fallback_model_refs || "").split(",").map((item) => item.trim())]
+            .filter(Boolean)
+            .join(" -> ") || `${settings.provider}/<choose-model>`}
+        </p>
       </div>
 
       <form className="terminal-shell" onSubmit={runCommand}>

@@ -8,7 +8,8 @@ export default function ModelSelection({ settings, onSettingsChange, providerCat
         <h2>Agent model selection</h2>
         <p>
           This follows the OpenClaw-style pattern: choose a provider first, then a primary model, then optional
-          fallback models. Settings are saved in browser localStorage on this machine.
+          fallback models. Settings are saved in browser localStorage on this machine and passed to the backend only
+          when needed for commands or runs.
         </p>
       </section>
 

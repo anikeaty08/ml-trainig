@@ -17,14 +17,24 @@ const defaultSettings = {
   provider: "ollama",
   auth_mode: "local",
   base_url: "http://127.0.0.1:11434",
+  primary_model_ref: "",
   model: "",
   fallback_models: "",
+  fallback_model_refs: "",
+  browser_session_hint: "",
   api_key: ""
 };
 
 function loadSettings() {
   try {
-    return { ...defaultSettings, ...JSON.parse(window.localStorage.getItem(SETTINGS_KEY) || "{}") };
+    const saved = { ...defaultSettings, ...JSON.parse(window.localStorage.getItem(SETTINGS_KEY) || "{}") };
+    if (!saved.primary_model_ref && saved.model) {
+      saved.primary_model_ref = saved.model.includes("/") ? saved.model : `${saved.provider}/${saved.model}`;
+    }
+    if (!saved.base_url) {
+      saved.base_url = defaultSettings.base_url;
+    }
+    return saved;
   } catch (error) {
     return defaultSettings;
   }
@@ -63,10 +73,13 @@ export default function App() {
   }, 3000);
 
   const activeModelRef = useMemo(() => {
+    if (settings.primary_model_ref) {
+      return settings.primary_model_ref;
+    }
     if (!settings.model) {
       return settings.provider || "unset";
     }
-    return `${settings.provider}/${settings.model}`;
+    return settings.model.includes("/") ? settings.model : `${settings.provider}/${settings.model}`;
   }, [settings]);
 
   return (

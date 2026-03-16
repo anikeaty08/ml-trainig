@@ -6,7 +6,7 @@ from typing import Any
 
 from . import database
 from .modules.analyzer import analyze_dataset
-from .modules.cleaner import clean_tabular_dataset
+from .modules.cleaner import clean_dataset
 from .modules.code_generator import generate_training_artifacts
 from .modules.detector import detect_dataset
 from .modules.error_analyzer import analyze_errors
@@ -72,9 +72,6 @@ class Orchestrator:
         try:
             self.update_progress(job_id, stage="detecting_type", progress=5, message="Analyzing uploaded dataset")
             detection = detect_dataset(Path(file_path))
-            if detection["dataset_type"] != "tabular":
-                self.mark_failed(job_id, "Only CSV/TSV tabular datasets are supported in this MVP")
-                return
             if not detection["target_column"] or detection["problem_type"] == "unknown":
                 self.mark_failed(
                     job_id,
@@ -90,11 +87,22 @@ class Orchestrator:
             )
 
             self.update_progress(job_id, stage="cleaning", progress=20, message="Cleaning dataset automatically")
-            cleaned = clean_tabular_dataset(detection["dataframe"], target_column=detection["target_column"])
+            cleaned = clean_dataset(
+                detection["dataframe"],
+                target_column=detection["target_column"],
+                dataset_type=detection["dataset_type"],
+                dataset_context=detection.get("dataset_context"),
+            )
             cleaned_df = cleaned["dataframe"]
 
             self.update_progress(job_id, stage="analyzing", progress=40, message="Profiling dataset quality and signal")
-            analysis = analyze_dataset(cleaned_df, target_column=cleaned["target_column"], task_type=detection["problem_type"])
+            analysis = analyze_dataset(
+                cleaned_df,
+                target_column=cleaned["target_column"],
+                task_type=detection["problem_type"],
+                dataset_type=detection["dataset_type"],
+                dataset_context=detection.get("dataset_context"),
+            )
             recommendation = recommend_model_families(analysis=analysis, task_type=detection["problem_type"])
 
             self.update_progress(job_id, stage="training", progress=55, message="Training multiple candidate models")
@@ -106,6 +114,8 @@ class Orchestrator:
                 cleaned_df,
                 target_column=cleaned["target_column"],
                 task_type=detection["problem_type"],
+                dataset_type=detection["dataset_type"],
+                dataset_context=detection.get("dataset_context"),
                 progress_callback=progress_callback,
             )
 
@@ -152,6 +162,7 @@ class Orchestrator:
                 comparison=training["comparison"],
                 summary={
                     "detection": detection["preview_summary"],
+                    "dataset_context": detection.get("dataset_context", {}),
                     "cleaning": cleaned["summary"],
                     "analysis": analysis,
                     "training": training["summary"],

@@ -104,7 +104,7 @@ def init_database() -> None:
 
 def _serialize(value: Any) -> Any:
     if isinstance(value, (dict, list)):
-        return json.dumps(value)
+        return json.dumps(value, default=str)
     return value
 
 
