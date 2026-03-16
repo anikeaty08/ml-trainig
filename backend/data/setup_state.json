@@ -5,7 +5,16 @@
     "core-tabular"
   ],
   "installed_pack_ids": [
-    "boosting-pack"
+    "audio-classic",
+    "audio-transformers",
+    "boosting-pack",
+    "deep-learning-runtime",
+    "text-classic",
+    "text-transformers",
+    "timeseries-classic",
+    "timeseries-deep",
+    "vision-transfer",
+    "vision-transformers"
   ],
   "deferred_pack_ids": [
     "core-tabular"
@@ -14,5 +23,5 @@
     "ollama"
   ],
   "download_now": true,
-  "updated_at": "2026-03-16T20:34:28.601455+00:00"
+  "updated_at": "2026-03-16T20:57:24.070603+00:00"
 }

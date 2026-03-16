@@ -464,8 +464,7 @@ def _tensorflow_lstm_results(
     ]
     results: list[dict[str, Any]] = []
 
-    for spec in specs:
-        started_at = time.perf_counter()
+    def build_model(spec: dict[str, Any]) -> Any:
         layers: list[Any] = [keras.layers.Input(shape=(len(lag_columns), 1))]
         for index, units in enumerate(spec["units"]):
             layers.append(
@@ -479,6 +478,11 @@ def _tensorflow_lstm_results(
         layers.append(keras.layers.Dense(1))
         model = keras.Sequential(layers)
         model.compile(optimizer="adam", loss="mse", metrics=["mae"])
+        return model
+
+    for spec in specs:
+        started_at = time.perf_counter()
+        model = build_model(spec)
         history = model.fit(
             X_train_seq,
             y_train.to_numpy(dtype=np.float32),
@@ -499,8 +503,7 @@ def _tensorflow_lstm_results(
         )
         validation_metrics = regression_metrics(y_val, validation_wrapper.predict(X_val))
 
-        final_model = keras.Sequential(layers)
-        final_model.compile(optimizer="adam", loss="mse", metrics=["mae"])
+        final_model = build_model(spec)
         final_model.fit(
             reshape(train_val_X),
             train_val_y.to_numpy(dtype=np.float32),

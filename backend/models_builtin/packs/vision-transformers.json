@@ -1,0 +1,9 @@
+{
+  "id": "vision-transformers",
+  "label": "Vision Transformers",
+  "installed_at": "2026-03-16T20:56:40.603424+00:00",
+  "models": [
+    "Vision Transformer (ViT)",
+    "ResNet50 + EfficientNet Ensemble"
+  ]
+}

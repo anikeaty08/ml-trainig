@@ -10,4 +10,5 @@ if [ ! -d "$VENV_DIR" ]; then
 fi
 
 source "$VENV_DIR/bin/activate"
+export LOKY_MAX_CPU_COUNT="${LOKY_MAX_CPU_COUNT:-$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1)}"
 python "$ROOT_DIR/scripts/start_server.py"

@@ -1,0 +1,10 @@
+{
+  "id": "vision-transfer",
+  "label": "Vision Transfer Learning",
+  "installed_at": "2026-03-16T20:56:40.602606+00:00",
+  "models": [
+    "ResNet50",
+    "EfficientNet-B0",
+    "MobileNetV2"
+  ]
+}

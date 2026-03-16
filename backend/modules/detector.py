@@ -152,6 +152,7 @@ def detect_dataset(path: Path) -> dict[str, Any]:
         "problem_type": problem_type,
         "target_column": target_column,
         "dataframe": dataframe,
+        "source_path": path,
         "dataset_context": dataset_context,
         "preview_summary": {
             "filename": path.name,

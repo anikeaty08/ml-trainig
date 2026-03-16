@@ -1,0 +1,8 @@
+{
+  "id": "audio-classic",
+  "label": "Audio Classic",
+  "installed_at": "2026-03-16T20:56:40.604154+00:00",
+  "models": [
+    "Spectrogram + CNN"
+  ]
+}

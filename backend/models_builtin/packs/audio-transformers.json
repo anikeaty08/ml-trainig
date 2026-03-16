@@ -1,0 +1,9 @@
+{
+  "id": "audio-transformers",
+  "label": "Audio Transformers",
+  "installed_at": "2026-03-16T20:56:40.604845+00:00",
+  "models": [
+    "Wav2Vec2",
+    "CNN + Wav2Vec2 Ensemble"
+  ]
+}

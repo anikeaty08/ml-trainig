@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import time
 from dataclasses import dataclass
 from typing import Any, Callable
@@ -345,7 +346,7 @@ def _build_ensemble(task_type: str, preprocessor: ColumnTransformer, winners: li
         return None
     estimators = [
         (
-            winner["name"].lower().replace(" ", "_").replace("+", "").replace("-", "_"),
+            re.sub(r"_+", "_", re.sub(r"[^a-z0-9_]+", "_", winner["name"].lower())).strip("_"),
             clone(winner["search"].best_estimator_.named_steps["model"]),
         )
         for winner in eligible_winners[:3]
@@ -391,38 +392,52 @@ def _run_candidate_searches(
             cv=cv,
             n_jobs=1,
             refit=True,
+            error_score="raise",
         )
-        search.fit(X_train, y_train)
-        validation_model = search.best_estimator_
-        validation_metrics = _evaluate(task_type, validation_model, X_val, y_val)
+        try:
+            search.fit(X_train, y_train)
+            validation_model = search.best_estimator_
+            validation_metrics = _evaluate(task_type, validation_model, X_val, y_val)
 
-        final_model = clone(validation_model)
-        final_model.fit(train_val_X, train_val_y)
-        test_metrics = _evaluate(task_type, final_model, X_test, y_test)
-        elapsed = round(time.perf_counter() - started_at, 3)
+            final_model = clone(validation_model)
+            final_model.fit(train_val_X, train_val_y)
+            test_metrics = _evaluate(task_type, final_model, X_test, y_test)
+            elapsed = round(time.perf_counter() - started_at, 3)
 
-        results.append(
-            {
-                "name": candidate.name,
-                "family": candidate.family,
-                "search": search,
-                "pipeline": final_model,
-                "cv_score_mean": round(float(search.best_score_), 4),
-                "cv_score_std": round(float(search.cv_results_["std_test_score"][search.best_index_]), 4),
-                "validation_metrics": validation_metrics,
-                "test_metrics": test_metrics,
-                "training_time_seconds": elapsed,
-                "params": search.best_params_,
-                "evaluation": {
-                    "X_test": X_test.copy(),
-                    "y_test": y_test.copy(),
-                    "predictions": final_model.predict(X_test),
-                    "probabilities": final_model.predict_proba(X_test)[:, 1].tolist()
-                    if task_type == "classification" and hasattr(final_model, "predict_proba") and len(np.unique(y_test)) == 2
-                    else [],
-                },
-            }
-        )
+            results.append(
+                {
+                    "name": candidate.name,
+                    "family": candidate.family,
+                    "search": search,
+                    "pipeline": final_model,
+                    "cv_score_mean": round(float(search.best_score_), 4),
+                    "cv_score_std": round(float(search.cv_results_["std_test_score"][search.best_index_]), 4),
+                    "validation_metrics": validation_metrics,
+                    "test_metrics": test_metrics,
+                    "training_time_seconds": elapsed,
+                    "params": search.best_params_,
+                    "evaluation": {
+                        "X_test": X_test.copy(),
+                        "y_test": y_test.copy(),
+                        "predictions": final_model.predict(X_test),
+                        "probabilities": final_model.predict_proba(X_test)[:, 1].tolist()
+                        if task_type == "classification" and hasattr(final_model, "predict_proba") and len(np.unique(y_test)) == 2
+                        else [],
+                    },
+                }
+            )
+        except Exception as exc:
+            if progress_callback:
+                progress_callback(
+                    f"Skipped {candidate.name}",
+                    55 + int((index / max(len(candidates), 1)) * 25),
+                    {
+                        "current_model": candidate.name,
+                        "completed_models": index,
+                        "total_models": len(candidates),
+                        "warning": str(exc),
+                    },
+                )
     return results
 
 
@@ -478,6 +493,8 @@ def _package_results(
     train_val_y: pd.Series,
     cv: Any,
 ) -> dict[str, Any]:
+    if not results:
+        raise ValueError("No candidate models finished successfully for this dataset")
     metric_name = primary_metric_name(task_type)
     sorted_results = sorted(results, key=lambda item: item["test_metrics"][metric_name], reverse=True)
     winners = sorted_results[:3]

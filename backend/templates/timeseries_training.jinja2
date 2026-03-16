@@ -1,1 +1,83 @@
-# Placeholder template for future time-series training generation.
+import pandas as pd
+
+BEST_MODEL_NAME = "{{ best_model_name }}"
+BEST_PARAMS = {{ best_params }}
+TARGET_COLUMN = "{{ target_column }}"
+FRAMEWORK = "{{ framework }}"
+TIME_COLUMN = BEST_PARAMS.get("time_column", "timestamp")
+
+dataset = pd.read_csv("cleaned_dataset.csv")
+dataset[TIME_COLUMN] = pd.to_datetime(dataset[TIME_COLUMN], errors="coerce")
+dataset = dataset.dropna(subset=[TIME_COLUMN]).sort_values(TIME_COLUMN).reset_index(drop=True)
+
+if "ARIMA" in BEST_MODEL_NAME:
+    from statsmodels.tsa.arima.model import ARIMA
+
+    order = tuple(BEST_PARAMS.get("order", [1, 1, 1]))
+    model = ARIMA(dataset[TARGET_COLUMN].astype(float), order=order).fit()
+    model.save("best_model.pkl")
+elif "Exponential Smoothing" in BEST_MODEL_NAME:
+    from statsmodels.tsa.holtwinters import ExponentialSmoothing
+
+    model = ExponentialSmoothing(
+        dataset[TARGET_COLUMN].astype(float),
+        trend=BEST_PARAMS.get("trend"),
+        seasonal=BEST_PARAMS.get("seasonal"),
+        seasonal_periods=BEST_PARAMS.get("seasonal_periods"),
+    ).fit(optimized=True)
+    model.save("best_model.pkl")
+elif "Prophet" in BEST_MODEL_NAME:
+    from prophet import Prophet
+    from prophet.serialize import model_to_json
+
+    prophet_frame = dataset[[TIME_COLUMN, TARGET_COLUMN]].rename(columns={TIME_COLUMN: "ds", TARGET_COLUMN: "y"})
+    model = Prophet(
+        changepoint_prior_scale=BEST_PARAMS.get("changepoint_prior_scale", 0.05),
+        seasonality_mode=BEST_PARAMS.get("seasonality_mode", "additive"),
+    )
+    model.fit(prophet_frame)
+    with open("best_model.json", "w", encoding="utf-8") as handle:
+        handle.write(model_to_json(model))
+elif FRAMEWORK == "tensorflow" and BEST_PARAMS.get("sequence_model") == "lstm":
+    import numpy as np
+    import tensorflow as tf
+
+    lag_columns = BEST_PARAMS.get("lag_columns", [])
+    lags = lag_columns or []
+    if not lags:
+        raise ValueError("Missing lag_columns for LSTM export")
+    supervised = dataset.copy()
+    for lag_column in lags:
+        lag_value = int(str(lag_column).rsplit("_lag_", 1)[-1])
+        supervised[lag_column] = supervised[TARGET_COLUMN].shift(lag_value)
+    supervised = supervised.dropna().reset_index(drop=True)
+
+    X = supervised[lags].to_numpy(dtype=np.float32).reshape(len(supervised), len(lags), 1)
+    y = supervised[TARGET_COLUMN].to_numpy(dtype=np.float32)
+
+    layers = [tf.keras.layers.Input(shape=(len(lags), 1))]
+    units = BEST_PARAMS.get("units", [64])
+    for index, width in enumerate(units):
+        layers.append(tf.keras.layers.LSTM(width, return_sequences=index < len(units) - 1))
+        if BEST_PARAMS.get("dropout", 0.1):
+            layers.append(tf.keras.layers.Dropout(BEST_PARAMS.get("dropout", 0.1)))
+    layers.append(tf.keras.layers.Dense(1))
+
+    model = tf.keras.Sequential(layers)
+    model.compile(optimizer="adam", loss="mse", metrics=["mae"])
+    model.fit(X, y, epochs=24, batch_size=min(64, max(8, len(X) // 8 or 8)), verbose=1)
+    model.save("best_model.keras")
+else:
+    from sklearn.ensemble import RandomForestRegressor
+
+    feature_frame = dataset.select_dtypes(include=["number"]).copy()
+    feature_frame = feature_frame.drop(columns=[TARGET_COLUMN], errors="ignore")
+    target = dataset[TARGET_COLUMN]
+    model = RandomForestRegressor(n_estimators=200, random_state=42)
+    model.fit(feature_frame, target)
+
+    import joblib
+
+    joblib.dump(model, "best_model.joblib")
+
+print("Trained", BEST_MODEL_NAME, "with", BEST_PARAMS)

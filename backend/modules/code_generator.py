@@ -16,6 +16,7 @@ def generate_training_artifacts(
     cleaned_df: pd.DataFrame,
     target_column: str,
     task_type: str,
+    dataset_type: str,
     best_model: dict[str, Any],
     artifact_dirs: dict[str, Path],
 ) -> dict[str, Path]:
@@ -24,10 +25,13 @@ def generate_training_artifacts(
 
     report_template = env.get_template("html_report.jinja2")
     framework = str(best_model.get("params", {}).get("framework") or "sklearn")
-    training_template_name = {
-        "tensorflow": "tensorflow_training.jinja2",
-        "pytorch": "pytorch_training.jinja2",
-    }.get(framework, "sklearn_training.jinja2")
+    if dataset_type == "timeseries":
+        training_template_name = "timeseries_training.jinja2"
+    else:
+        training_template_name = {
+            "tensorflow": "tensorflow_training.jinja2",
+            "pytorch": "pytorch_training.jinja2",
+        }.get(framework, "sklearn_training.jinja2")
     training_template = env.get_template(training_template_name)
 
     cleaned_dataset_path = save_csv(artifact_dirs["data"] / "cleaned_dataset.csv", cleaned_df)
@@ -57,6 +61,8 @@ def generate_training_artifacts(
     training_script = training_template.render(
         target_column=target_column,
         task_type=task_type,
+        dataset_type=dataset_type,
+        framework=framework,
         best_model_name=best_model["name"],
         best_params=best_model["params"],
     )
@@ -84,6 +90,12 @@ def generate_training_artifacts(
         requirements_lines.append("tensorflow-cpu")
     if framework == "pytorch":
         requirements_lines.append("torch")
+    if framework == "statsmodels":
+        requirements_lines.append("statsmodels")
+    if framework == "prophet":
+        requirements_lines.append("prophet")
+    if framework == "transformers":
+        requirements_lines.extend(["torch", "transformers"])
     save_text(artifact_dirs["code"] / "requirements.txt", "\n".join(requirements_lines) + "\n")
 
     return {

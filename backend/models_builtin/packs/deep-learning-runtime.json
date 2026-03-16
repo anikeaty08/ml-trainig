@@ -1,0 +1,9 @@
+{
+  "id": "deep-learning-runtime",
+  "label": "Deep Learning Runtime",
+  "installed_at": "2026-03-16T20:56:40.605468+00:00",
+  "models": [
+    "TensorFlow / Keras",
+    "PyTorch"
+  ]
+}

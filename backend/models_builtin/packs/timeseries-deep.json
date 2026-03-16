@@ -1,0 +1,8 @@
+{
+  "id": "timeseries-deep",
+  "label": "Time Series Deep",
+  "installed_at": "2026-03-16T20:56:40.601496+00:00",
+  "models": [
+    "LSTM"
+  ]
+}
