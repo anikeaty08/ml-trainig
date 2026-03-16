@@ -2,6 +2,7 @@ $ErrorActionPreference = "Stop"
 
 $RootDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $VenvDir = Join-Path $RootDir ".venv"
+$AppOrigin = "http://127.0.0.1:38475"
 
 function Resolve-Python {
     if (Get-Command py -ErrorAction SilentlyContinue) {
@@ -35,6 +36,7 @@ $ActivateScript = Join-Path $VenvDir "Scripts\\Activate.ps1"
 
 python -m pip install --upgrade pip
 python -m pip install -r (Join-Path $RootDir "requirements.txt")
+python -m pip install -r (Join-Path $RootDir "requirements-full.txt")
 python (Join-Path $RootDir "scripts\\download_models.py")
 python (Join-Path $RootDir "scripts\\init_db.py")
 
@@ -46,6 +48,6 @@ Pop-Location
 $ServerScript = Join-Path $RootDir "scripts\\start_server.py"
 Start-Process python -ArgumentList "`"$ServerScript`""
 Start-Sleep -Seconds 5
-Start-Process "http://localhost:3000"
+Start-Process $AppOrigin
 
-Write-Host "ML Pipeline Agent ready at http://localhost:3000"
+Write-Host "ML Pipeline Agent ready at $AppOrigin"

@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VENV_DIR="$ROOT_DIR/.venv"
+APP_ORIGIN="http://127.0.0.1:38475"
 
 command_exists() {
   command -v "$1" >/dev/null 2>&1
@@ -32,9 +33,9 @@ ensure_node() {
 
 open_browser() {
   if command_exists open; then
-    open "http://localhost:3000" >/dev/null 2>&1 || true
+    open "$APP_ORIGIN" >/dev/null 2>&1 || true
   elif command_exists xdg-open; then
-    xdg-open "http://localhost:3000" >/dev/null 2>&1 || true
+    xdg-open "$APP_ORIGIN" >/dev/null 2>&1 || true
   fi
 }
 
@@ -48,6 +49,7 @@ fi
 source "$VENV_DIR/bin/activate"
 python -m pip install --upgrade pip
 python -m pip install -r "$ROOT_DIR/requirements.txt"
+python -m pip install -r "$ROOT_DIR/requirements-full.txt"
 python "$ROOT_DIR/scripts/download_models.py"
 python "$ROOT_DIR/scripts/init_db.py"
 
@@ -60,5 +62,5 @@ python "$ROOT_DIR/scripts/start_server.py" &
 SERVER_PID=$!
 sleep 5
 open_browser
-echo "ML Pipeline Agent ready at http://localhost:3000"
+echo "ML Pipeline Agent ready at $APP_ORIGIN"
 wait $SERVER_PID

@@ -33,3 +33,12 @@ def test_agent_policy_endpoint():
     payload = response.json()
     assert payload["chat_chain"]
     assert payload["image_chain"]
+
+
+def test_available_models_endpoint_lists_full_stack_candidates():
+    response = client.get("/api/models/available")
+    assert response.status_code == 200
+    families = response.json()["candidate_families"]
+    assert "XGBoost" in families
+    assert "BERT" in families
+    assert "Wav2Vec2" in families

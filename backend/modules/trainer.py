@@ -180,8 +180,13 @@ def _tabular_candidates(task_type: str) -> list[Candidate]:
             Candidate("SVM", SVC(probability=True, class_weight="balanced"), {"model__C": [0.5, 1.0, 3.0], "model__gamma": ["scale", "auto"]}, "kernel"),
             Candidate(
                 "Neural Network (MLP)",
-                MLPClassifier(random_state=42, max_iter=300, early_stopping=True),
-                {"model__hidden_layer_sizes": [(128,), (128, 64)], "model__alpha": [0.0001, 0.001]},
+                MLPClassifier(random_state=42, max_iter=500, early_stopping=True),
+                {
+                    "model__hidden_layer_sizes": [(128,), (256, 128), (256, 128, 64)],
+                    "model__activation": ["relu", "tanh"],
+                    "model__alpha": [0.0001, 0.001],
+                    "model__learning_rate_init": [0.001, 0.0005],
+                },
                 "neural",
             ),
             Candidate("KNN", KNeighborsClassifier(), {"model__n_neighbors": [5, 11, 21]}, "instance"),
@@ -200,8 +205,13 @@ def _tabular_candidates(task_type: str) -> list[Candidate]:
         Candidate("SVR", SVR(), {"model__C": [0.5, 1.0, 3.0], "model__gamma": ["scale", "auto"]}, "kernel"),
         Candidate(
             "Neural Network Regressor",
-            MLPRegressor(random_state=42, max_iter=300, early_stopping=True),
-            {"model__hidden_layer_sizes": [(128,), (128, 64)], "model__alpha": [0.0001, 0.001]},
+            MLPRegressor(random_state=42, max_iter=500, early_stopping=True),
+            {
+                "model__hidden_layer_sizes": [(128,), (256, 128), (256, 128, 64)],
+                "model__activation": ["relu", "tanh"],
+                "model__alpha": [0.0001, 0.001],
+                "model__learning_rate_init": [0.001, 0.0005],
+            },
             "neural",
         ),
         Candidate("KNN Regressor", KNeighborsRegressor(), {"model__n_neighbors": [5, 11, 21]}, "instance"),
@@ -220,8 +230,13 @@ def _text_candidates(task_type: str) -> list[Candidate]:
             Candidate("SVM + TF-IDF", SVC(probability=True, class_weight="balanced"), {"model__C": [0.5, 1.0, 2.0]}, "kernel"),
             Candidate(
                 "Neural Network (MLP) + TF-IDF",
-                MLPClassifier(random_state=42, max_iter=250, early_stopping=True),
-                {"model__hidden_layer_sizes": [(256,), (256, 128)], "model__alpha": [0.0001, 0.001]},
+                MLPClassifier(random_state=42, max_iter=400, early_stopping=True),
+                {
+                    "model__hidden_layer_sizes": [(256,), (512, 256), (512, 256, 128)],
+                    "model__activation": ["relu", "tanh"],
+                    "model__alpha": [0.0001, 0.001],
+                    "model__learning_rate_init": [0.001, 0.0005],
+                },
                 "neural",
             ),
             *_optional_boosting_candidates("classification"),
@@ -244,8 +259,13 @@ def _timeseries_candidates() -> list[Candidate]:
         Candidate("Hist Gradient Boosting Regressor", HistGradientBoostingRegressor(random_state=42), {"model__learning_rate": [0.05, 0.1], "model__max_depth": [None, 6]}, "boosting"),
         Candidate(
             "Neural Network Regressor",
-            MLPRegressor(random_state=42, max_iter=300, early_stopping=True),
-            {"model__hidden_layer_sizes": [(128,), (128, 64)], "model__alpha": [0.0001, 0.001]},
+            MLPRegressor(random_state=42, max_iter=500, early_stopping=True),
+            {
+                "model__hidden_layer_sizes": [(128,), (256, 128), (256, 128, 64)],
+                "model__activation": ["relu", "tanh"],
+                "model__alpha": [0.0001, 0.001],
+                "model__learning_rate_init": [0.001, 0.0005],
+            },
             "neural",
         ),
         Candidate("SVR", SVR(), {"model__C": [0.5, 1.0, 2.0]}, "kernel"),

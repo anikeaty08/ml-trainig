@@ -1,1 +1,38 @@
-# Placeholder template for future TensorFlow training generation.
+import pandas as pd
+import tensorflow as tf
+
+BEST_MODEL_NAME = "{{ best_model_name }}"
+BEST_PARAMS = {{ best_params }}
+TARGET_COLUMN = "{{ target_column }}"
+TASK_TYPE = "{{ task_type }}"
+
+dataset = pd.read_csv("cleaned_dataset.csv")
+X = dataset.drop(columns=[TARGET_COLUMN]).select_dtypes(include=["number"]).fillna(0.0).astype("float32")
+y = dataset[TARGET_COLUMN]
+
+if TASK_TYPE == "classification":
+    encoded = pd.factorize(y)
+    y_tensor = encoded[0]
+    output_units = 1 if len(encoded[1]) <= 2 else len(encoded[1])
+    output_activation = "sigmoid" if output_units == 1 else "softmax"
+    loss_name = "binary_crossentropy" if output_units == 1 else "sparse_categorical_crossentropy"
+else:
+    y_tensor = y.astype("float32")
+    output_units = 1
+    output_activation = "linear"
+    loss_name = "mse"
+
+model = tf.keras.Sequential(
+    [
+        tf.keras.layers.Input(shape=(X.shape[1],)),
+        tf.keras.layers.Dense(256, activation="relu"),
+        tf.keras.layers.Dropout(0.15),
+        tf.keras.layers.Dense(128, activation="relu"),
+        tf.keras.layers.Dense(output_units, activation=output_activation),
+    ]
+)
+model.compile(optimizer="adam", loss=loss_name, metrics=["accuracy"] if TASK_TYPE == "classification" else ["mae"])
+model.fit(X, y_tensor, epochs=18, batch_size=min(64, max(8, len(X) // 8 or 8)), verbose=1)
+model.save("best_model.keras")
+
+print("Trained", BEST_MODEL_NAME, "with", BEST_PARAMS)

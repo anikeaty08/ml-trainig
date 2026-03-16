@@ -26,6 +26,28 @@ def _optional_module(name: str) -> Any | None:
         return None
 
 
+def _architecture_specs(dataset_type: str) -> list[dict[str, Any]]:
+    if dataset_type == "text":
+        return [
+            {"suffix": "Wide ReLU", "hidden_layers": [512, 256], "dropout": 0.15, "activation": "relu"},
+            {"suffix": "Deep GELU", "hidden_layers": [768, 512, 256, 128], "dropout": 0.2, "activation": "gelu"},
+        ]
+    if dataset_type == "timeseries":
+        return [
+            {"suffix": "Temporal Dense", "hidden_layers": [256, 128, 64], "dropout": 0.1, "activation": "relu"},
+            {"suffix": "Deep Forecast", "hidden_layers": [384, 256, 128, 64], "dropout": 0.15, "activation": "gelu"},
+        ]
+    if dataset_type in {"image", "audio"}:
+        return [
+            {"suffix": "Feature Head", "hidden_layers": [256, 128], "dropout": 0.15, "activation": "relu"},
+            {"suffix": "Deep Feature Head", "hidden_layers": [512, 256, 128], "dropout": 0.2, "activation": "gelu"},
+        ]
+    return [
+        {"suffix": "Wide ReLU", "hidden_layers": [256, 128], "dropout": 0.15, "activation": "relu"},
+        {"suffix": "Deep GELU", "hidden_layers": [384, 256, 128, 64], "dropout": 0.2, "activation": "gelu"},
+    ]
+
+
 @dataclass
 class TensorFlowFeatureModel:
     preprocessor: Any
@@ -147,92 +169,100 @@ def _tensorflow_results(
         final_y_train = y_train.to_numpy(dtype=np.float32)
         final_y_val = y_val.to_numpy(dtype=np.float32)
 
-    def build_model(input_dim: int) -> Any:
-        return keras.Sequential(
-            [
-                keras.layers.Input(shape=(input_dim,)),
-                keras.layers.Dense(256, activation="relu"),
-                keras.layers.Dropout(0.15),
-                keras.layers.Dense(128, activation="relu"),
-                keras.layers.Dense(output_units, activation=output_activation),
-            ]
+    def build_model(input_dim: int, spec: dict[str, Any]) -> Any:
+        layers = [keras.layers.Input(shape=(input_dim,))]
+        for width in spec["hidden_layers"]:
+            layers.append(keras.layers.Dense(width, activation=spec["activation"]))
+            layers.append(keras.layers.BatchNormalization())
+            if spec["dropout"] > 0:
+                layers.append(keras.layers.Dropout(spec["dropout"]))
+        layers.append(keras.layers.Dense(output_units, activation=output_activation))
+        return keras.Sequential(layers)
+
+    results: list[dict[str, Any]] = []
+    for spec in _architecture_specs(dataset_type):
+        started_at = time.perf_counter()
+        model = build_model(X_train_array.shape[1], spec)
+        model.compile(optimizer="adam", loss=loss_name, metrics=metrics)
+        callbacks = [keras.callbacks.EarlyStopping(monitor="val_loss", patience=4, restore_best_weights=True)]
+        history = model.fit(
+            X_train_array,
+            final_y_train,
+            validation_data=(X_val_array, final_y_val),
+            epochs=22,
+            batch_size=min(64, max(8, len(X_train_array) // 8 or 8)),
+            verbose=0,
+            callbacks=callbacks,
         )
 
-    started_at = time.perf_counter()
-    model = build_model(X_train_array.shape[1])
-    model.compile(optimizer="adam", loss=loss_name, metrics=metrics)
-    callbacks = [keras.callbacks.EarlyStopping(monitor="val_loss", patience=4, restore_best_weights=True)]
-    history = model.fit(
-        X_train_array,
-        final_y_train,
-        validation_data=(X_val_array, final_y_val),
-        epochs=18,
-        batch_size=min(64, max(8, len(X_train_array) // 8 or 8)),
-        verbose=0,
-        callbacks=callbacks,
-    )
+        validation_wrapper = TensorFlowFeatureModel(
+            preprocessor=fit_preprocessor,
+            model=model,
+            task_type=task_type,
+            label_encoder=label_encoder,
+            learning_curve_=[
+                {"epoch": index + 1, "train_loss": round(float(loss), 4), "validation_loss": round(float(val_loss), 4)}
+                for index, (loss, val_loss) in enumerate(zip(history.history.get("loss", []), history.history.get("val_loss", [])))
+            ],
+        )
+        validation_metrics = _evaluate_model(task_type, validation_wrapper, X_val, y_val)
 
-    validation_wrapper = TensorFlowFeatureModel(
-        preprocessor=fit_preprocessor,
-        model=model,
-        task_type=task_type,
-        label_encoder=label_encoder,
-        learning_curve_=[
-            {"epoch": index + 1, "train_loss": round(float(loss), 4), "validation_loss": round(float(val_loss), 4)}
-            for index, (loss, val_loss) in enumerate(zip(history.history.get("loss", []), history.history.get("val_loss", [])))
-        ],
-    )
-    validation_metrics = _evaluate_model(task_type, validation_wrapper, X_val, y_val)
+        final_preprocessor = clone(preprocessor)
+        X_train_val_array = _dense_matrix(final_preprocessor.fit_transform(train_val_X))
+        final_model = build_model(X_train_val_array.shape[1], spec)
+        final_model.compile(optimizer="adam", loss=loss_name, metrics=metrics)
+        if task_type == "classification":
+            final_targets = label_encoder.fit_transform(train_val_y)
+        else:
+            final_targets = train_val_y.to_numpy(dtype=np.float32)
+        final_model.fit(
+            X_train_val_array,
+            final_targets,
+            validation_split=0.1 if len(X_train_val_array) > 24 else 0.0,
+            epochs=22,
+            batch_size=min(64, max(8, len(X_train_val_array) // 8 or 8)),
+            verbose=0,
+        )
+        final_wrapper = TensorFlowFeatureModel(
+            preprocessor=final_preprocessor,
+            model=final_model,
+            task_type=task_type,
+            label_encoder=label_encoder if task_type == "classification" else None,
+            learning_curve_=validation_wrapper.learning_curve_,
+        )
+        test_metrics = _evaluate_model(task_type, final_wrapper, X_test, y_test)
+        elapsed = round(time.perf_counter() - started_at, 3)
 
-    final_preprocessor = clone(preprocessor)
-    X_train_val_array = _dense_matrix(final_preprocessor.fit_transform(train_val_X))
-    X_test_eval = _dense_matrix(final_preprocessor.transform(X_test))
-    final_model = build_model(X_train_val_array.shape[1])
-    final_model.compile(optimizer="adam", loss=loss_name, metrics=metrics)
-    if task_type == "classification":
-        final_targets = label_encoder.fit_transform(train_val_y)
-    else:
-        final_targets = train_val_y.to_numpy(dtype=np.float32)
-    final_model.fit(
-        X_train_val_array,
-        final_targets,
-        validation_split=0.1 if len(X_train_val_array) > 24 else 0.0,
-        epochs=18,
-        batch_size=min(64, max(8, len(X_train_val_array) // 8 or 8)),
-        verbose=0,
-    )
-    final_wrapper = TensorFlowFeatureModel(
-        preprocessor=final_preprocessor,
-        model=final_model,
-        task_type=task_type,
-        label_encoder=label_encoder if task_type == "classification" else None,
-        learning_curve_=validation_wrapper.learning_curve_,
-    )
-    test_metrics = _evaluate_model(task_type, final_wrapper, X_test, y_test)
-    elapsed = round(time.perf_counter() - started_at, 3)
+        results.append(
+            {
+                "name": f"TensorFlow / Keras Dense Network ({dataset_type} | {spec['suffix']})",
+                "family": "deep_learning",
+                "search": None,
+                "pipeline": final_wrapper,
+                "cv_score_mean": round(float(validation_metrics[primary_metric_name(task_type)]), 4),
+                "cv_score_std": 0.0,
+                "validation_metrics": validation_metrics,
+                "test_metrics": test_metrics,
+                "training_time_seconds": elapsed,
+                "params": {
+                    "framework": "tensorflow",
+                    "epochs": 22,
+                    "hidden_layers": spec["hidden_layers"],
+                    "activation": spec["activation"],
+                    "dropout": spec["dropout"],
+                },
+                "evaluation": {
+                    "X_test": X_test.copy(),
+                    "y_test": y_test.copy(),
+                    "predictions": final_wrapper.predict(X_test),
+                    "probabilities": final_wrapper.predict_proba(X_test)[:, 1].tolist()
+                    if task_type == "classification" and len(np.unique(y_test)) == 2
+                    else [],
+                },
+            }
+        )
 
-    return [
-        {
-            "name": f"TensorFlow / Keras Dense Network ({dataset_type})",
-            "family": "deep_learning",
-            "search": None,
-            "pipeline": final_wrapper,
-            "cv_score_mean": round(float(validation_metrics[primary_metric_name(task_type)]), 4),
-            "cv_score_std": 0.0,
-            "validation_metrics": validation_metrics,
-            "test_metrics": test_metrics,
-            "training_time_seconds": elapsed,
-            "params": {"framework": "tensorflow", "epochs": 18, "hidden_layers": [256, 128]},
-            "evaluation": {
-                "X_test": X_test.copy(),
-                "y_test": y_test.copy(),
-                "predictions": final_wrapper.predict(X_test),
-                "probabilities": final_wrapper.predict_proba(X_test)[:, 1].tolist()
-                if task_type == "classification" and len(np.unique(y_test)) == 2
-                else [],
-            },
-        }
-    ]
+    return results
 
 
 def _pytorch_results(
@@ -269,22 +299,30 @@ def _pytorch_results(
         class_count = 1
 
     class DenseNet(torch.nn.Module):
-        def __init__(self, input_dim: int, output_dim: int) -> None:
+        def __init__(self, input_dim: int, output_dim: int, spec: dict[str, Any]) -> None:
             super().__init__()
-            self.layers = torch.nn.Sequential(
-                torch.nn.Linear(input_dim, 256),
-                torch.nn.ReLU(),
-                torch.nn.Dropout(0.1),
-                torch.nn.Linear(256, 128),
-                torch.nn.ReLU(),
-                torch.nn.Linear(128, output_dim),
-            )
+            modules: list[Any] = []
+            current_dim = input_dim
+            activation_layer = torch.nn.GELU if spec["activation"] == "gelu" else torch.nn.ReLU
+            for width in spec["hidden_layers"]:
+                modules.extend(
+                    [
+                        torch.nn.Linear(current_dim, width),
+                        activation_layer(),
+                        torch.nn.BatchNorm1d(width),
+                    ]
+                )
+                if spec["dropout"] > 0:
+                    modules.append(torch.nn.Dropout(spec["dropout"]))
+                current_dim = width
+            modules.append(torch.nn.Linear(current_dim, output_dim))
+            self.layers = torch.nn.Sequential(*modules)
 
         def forward(self, inputs: Any) -> Any:
             return self.layers(inputs)
 
-    def train_once(features: np.ndarray, targets: np.ndarray, output_dim: int) -> tuple[Any, list[dict[str, Any]]]:
-        model = DenseNet(features.shape[1], output_dim)
+    def train_once(features: np.ndarray, targets: np.ndarray, output_dim: int, spec: dict[str, Any]) -> tuple[Any, list[dict[str, Any]]]:
+        model = DenseNet(features.shape[1], output_dim, spec)
         optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
         if task_type == "classification":
             criterion = torch.nn.BCEWithLogitsLoss() if output_dim == 1 else torch.nn.CrossEntropyLoss()
@@ -302,7 +340,7 @@ def _pytorch_results(
 
         curve = []
         model.train()
-        for epoch in range(14):
+        for epoch in range(18):
             optimizer.zero_grad()
             outputs = model(x_tensor)
             loss = criterion(outputs, y_tensor)
@@ -311,63 +349,74 @@ def _pytorch_results(
             curve.append({"epoch": epoch + 1, "train_loss": round(float(loss.item()), 4)})
         return model, curve
 
-    started_at = time.perf_counter()
-    validation_model, curve = train_once(X_train_array, y_train_encoded, 1 if class_count <= 2 else class_count)
-    validation_wrapper = TorchFeatureModel(
-        preprocessor=fit_preprocessor,
-        model=validation_model,
-        torch_module=torch,
-        task_type=task_type,
-        label_encoder=label_encoder,
-        learning_curve_=curve,
-    )
-    validation_metrics = _evaluate_model(task_type, validation_wrapper, X_val, y_val)
+    results: list[dict[str, Any]] = []
+    for spec in _architecture_specs(dataset_type):
+        started_at = time.perf_counter()
+        validation_model, curve = train_once(X_train_array, y_train_encoded, 1 if class_count <= 2 else class_count, spec)
+        validation_wrapper = TorchFeatureModel(
+            preprocessor=fit_preprocessor,
+            model=validation_model,
+            torch_module=torch,
+            task_type=task_type,
+            label_encoder=label_encoder,
+            learning_curve_=curve,
+        )
+        validation_metrics = _evaluate_model(task_type, validation_wrapper, X_val, y_val)
 
-    final_preprocessor = clone(preprocessor)
-    X_train_val_array = _dense_matrix(final_preprocessor.fit_transform(train_val_X))
-    final_targets = (
-        label_encoder.fit_transform(train_val_y)
-        if task_type == "classification"
-        else train_val_y.to_numpy(dtype=np.float32)
-    )
-    final_model, final_curve = train_once(
-        X_train_val_array,
-        final_targets,
-        1 if task_type == "regression" or len(np.unique(final_targets)) <= 2 else len(np.unique(final_targets)),
-    )
-    final_wrapper = TorchFeatureModel(
-        preprocessor=final_preprocessor,
-        model=final_model,
-        torch_module=torch,
-        task_type=task_type,
-        label_encoder=label_encoder if task_type == "classification" else None,
-        learning_curve_=final_curve,
-    )
-    test_metrics = _evaluate_model(task_type, final_wrapper, X_test, y_test)
-    elapsed = round(time.perf_counter() - started_at, 3)
+        final_preprocessor = clone(preprocessor)
+        X_train_val_array = _dense_matrix(final_preprocessor.fit_transform(train_val_X))
+        final_targets = (
+            label_encoder.fit_transform(train_val_y)
+            if task_type == "classification"
+            else train_val_y.to_numpy(dtype=np.float32)
+        )
+        final_model, final_curve = train_once(
+            X_train_val_array,
+            final_targets,
+            1 if task_type == "regression" or len(np.unique(final_targets)) <= 2 else len(np.unique(final_targets)),
+            spec,
+        )
+        final_wrapper = TorchFeatureModel(
+            preprocessor=final_preprocessor,
+            model=final_model,
+            torch_module=torch,
+            task_type=task_type,
+            label_encoder=label_encoder if task_type == "classification" else None,
+            learning_curve_=final_curve,
+        )
+        test_metrics = _evaluate_model(task_type, final_wrapper, X_test, y_test)
+        elapsed = round(time.perf_counter() - started_at, 3)
 
-    return [
-        {
-            "name": f"PyTorch Dense Network ({dataset_type})",
-            "family": "deep_learning",
-            "search": None,
-            "pipeline": final_wrapper,
-            "cv_score_mean": round(float(validation_metrics[primary_metric_name(task_type)]), 4),
-            "cv_score_std": 0.0,
-            "validation_metrics": validation_metrics,
-            "test_metrics": test_metrics,
-            "training_time_seconds": elapsed,
-            "params": {"framework": "pytorch", "epochs": 14, "hidden_layers": [256, 128]},
-            "evaluation": {
-                "X_test": X_test.copy(),
-                "y_test": y_test.copy(),
-                "predictions": final_wrapper.predict(X_test),
-                "probabilities": final_wrapper.predict_proba(X_test)[:, 1].tolist()
-                if task_type == "classification" and len(np.unique(y_test)) == 2
-                else [],
-            },
-        }
-    ]
+        results.append(
+            {
+                "name": f"PyTorch Dense Network ({dataset_type} | {spec['suffix']})",
+                "family": "deep_learning",
+                "search": None,
+                "pipeline": final_wrapper,
+                "cv_score_mean": round(float(validation_metrics[primary_metric_name(task_type)]), 4),
+                "cv_score_std": 0.0,
+                "validation_metrics": validation_metrics,
+                "test_metrics": test_metrics,
+                "training_time_seconds": elapsed,
+                "params": {
+                    "framework": "pytorch",
+                    "epochs": 18,
+                    "hidden_layers": spec["hidden_layers"],
+                    "activation": spec["activation"],
+                    "dropout": spec["dropout"],
+                },
+                "evaluation": {
+                    "X_test": X_test.copy(),
+                    "y_test": y_test.copy(),
+                    "predictions": final_wrapper.predict(X_test),
+                    "probabilities": final_wrapper.predict_proba(X_test)[:, 1].tolist()
+                    if task_type == "classification" and len(np.unique(y_test)) == 2
+                    else [],
+                },
+            }
+        )
+
+    return results
 
 
 def train_optional_deep_models(
