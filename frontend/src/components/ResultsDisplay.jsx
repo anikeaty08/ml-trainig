@@ -34,6 +34,9 @@ export default function ResultsDisplay({ jobId, result }) {
           <a className="button secondary" href={api.getDownloadUrl(jobId, "cleaned-data")}>
             Download cleaned data
           </a>
+          <a className="button secondary" href={api.getDownloadUrl(jobId, "bundle")}>
+            Download full bundle
+          </a>
         </div>
       </section>
 

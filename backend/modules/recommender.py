@@ -67,6 +67,19 @@ def recommend_model_families(analysis: dict[str, Any], task_type: str) -> dict[s
             "dataset_fit": analysis["dataset_fitness"],
         }
 
+    if dataset_type == "image":
+        recommended = [
+            {"name": "Random Forest on visual features", "reason": "Robust default for handcrafted image features"},
+            {"name": "Extra Trees on visual features", "reason": "Fast ensemble comparison for local image features"},
+            {"name": "Histogram Gradient Boosting", "reason": "Useful boosted-tree comparison on derived image signals"},
+            {"name": "SVM", "reason": "Can perform well on compact visual feature spaces"},
+        ]
+        return {
+            "recommended": recommended,
+            "not_recommended": [{"name": "Naive Bayes", "reason": "Usually too weak for rich visual patterns"}],
+            "dataset_fit": analysis["dataset_fitness"],
+        }
+
     if task_type == "classification":
         recommended = [
             {"name": "Logistic Regression", "reason": "Strong baseline and sanity check"},

@@ -19,7 +19,7 @@ DB_PATH = BACKEND_DIR / "db.sqlite"
 API_HOST = "0.0.0.0"
 API_PORT = 8000
 FRONTEND_PORT = 3000
-SUPPORTED_FILE_EXTENSIONS = {".csv", ".tsv", ".txt"}
+SUPPORTED_FILE_EXTENSIONS = {".csv", ".tsv", ".txt", ".zip"}
 
 
 def ensure_directories() -> None:

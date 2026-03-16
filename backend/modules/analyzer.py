@@ -79,6 +79,16 @@ def analyze_dataset(
     else:
         timeseries_summary = {}
 
+    if dataset_type == "image":
+        image_summary = {
+            "image_count": context.get("image_count", int(df.shape[0])),
+            "class_distribution": context.get("class_distribution", {}),
+            "label_strategy": context.get("label_strategy", "derived"),
+        }
+        fitness.append("Image archive detected; local handcrafted visual features were extracted for classification")
+    else:
+        image_summary = {}
+
     return {
         "shape": {"rows": int(df.shape[0]), "columns": int(df.shape[1])},
         "dataset_type": dataset_type,
@@ -88,6 +98,7 @@ def analyze_dataset(
         "top_numeric_correlations": numeric_correlations[:10],
         "text_summary": text_summary,
         "timeseries_summary": timeseries_summary,
+        "image_summary": image_summary,
         "numeric_profile": [
             {
                 "feature": column,

@@ -21,7 +21,7 @@ from .modules.recommender import provider_catalog
 from .orchestrator import Orchestrator
 from .utils.agent_routing import model_chain, normalize_agent_settings
 from .utils.helpers import read_json_file
-from .utils.storage import save_upload
+from .utils.storage import create_bundle_archive, save_upload
 from .utils.validators import validate_upload
 
 
@@ -191,6 +191,18 @@ def download_predictions(job_id: str) -> FileResponse:
 @app.get("/api/downloads/{job_id}/cleaned-data")
 def download_cleaned_data(job_id: str) -> FileResponse:
     return _download_path(job_id, "cleaned_data_path")
+
+
+@app.get("/api/downloads/{job_id}/bundle")
+def download_bundle(job_id: str) -> FileResponse:
+    job = database.get_job(job_id)
+    if not job or not job.get("report_path"):
+        raise HTTPException(status_code=404, detail="Bundle not available")
+    reports_dir = Path(job["report_path"]).parent.parent
+    if not reports_dir.exists():
+        raise HTTPException(status_code=404, detail="Bundle source folder missing")
+    archive_path = create_bundle_archive(reports_dir)
+    return FileResponse(archive_path)
 
 
 @app.get("/api/agent/providers")

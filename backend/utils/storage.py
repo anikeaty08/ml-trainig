@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import json
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -64,3 +65,9 @@ def save_comparison_csv(reports_dir: Path, rows: list[dict[str, Any]]) -> Path:
         writer.writeheader()
         writer.writerows(rows)
     return path
+
+
+def create_bundle_archive(base_dir: Path) -> Path:
+    archive_base = base_dir.parent / f"{base_dir.name}_bundle"
+    archive_path = shutil.make_archive(str(archive_base), "zip", root_dir=base_dir)
+    return Path(archive_path)

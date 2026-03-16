@@ -92,6 +92,7 @@ class Orchestrator:
                 target_column=detection["target_column"],
                 dataset_type=detection["dataset_type"],
                 dataset_context=detection.get("dataset_context"),
+                source_path=str(detection.get("source_path") or file_path),
             )
             cleaned_df = cleaned["dataframe"]
 

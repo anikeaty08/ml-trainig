@@ -6,6 +6,8 @@ from typing import Any
 import pandas as pd
 from pandas.api.types import is_numeric_dtype
 
+from .image_pipeline import detect_image_archive
+
 
 LIKELY_TARGET_NAMES = ("target", "label", "class", "y", "output", "prediction", "response")
 
@@ -96,6 +98,9 @@ def infer_problem_type(df: pd.DataFrame, target_column: str | None) -> str:
 
 
 def detect_dataset(path: Path) -> dict[str, Any]:
+    if path.suffix.lower() == ".zip":
+        return detect_image_archive(path)
+
     if path.suffix.lower() not in {".csv", ".tsv", ".txt"}:
         return {
             "dataset_type": "unsupported",

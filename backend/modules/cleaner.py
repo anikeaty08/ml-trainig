@@ -6,6 +6,8 @@ import numpy as np
 import pandas as pd
 from pandas.api.types import is_numeric_dtype
 
+from .image_pipeline import clean_image_dataset
+
 
 def _quality_score(df: pd.DataFrame) -> float:
     missing_ratio = float(df.isna().mean().mean()) if len(df.columns) else 0.0
@@ -141,15 +143,23 @@ def clean_timeseries_dataset(
 
 
 def clean_dataset(
-    df: pd.DataFrame,
+    df: pd.DataFrame | None,
     *,
     target_column: str | None,
     dataset_type: str,
     dataset_context: dict[str, Any] | None = None,
+    source_path: str | None = None,
 ) -> dict[str, Any]:
     context = dataset_context or {}
+    if dataset_type == "image":
+        if not source_path:
+            raise ValueError("Image datasets require a source_path")
+        return clean_image_dataset(source_path, target_column=target_column or "label")
     if dataset_type == "text" and target_column and context.get("text_column"):
+        assert df is not None
         return clean_text_dataset(df, target_column=target_column, text_column=context["text_column"])
     if dataset_type == "timeseries" and target_column and context.get("time_column"):
+        assert df is not None
         return clean_timeseries_dataset(df, target_column=target_column, time_column=context["time_column"])
+    assert df is not None
     return clean_tabular_dataset(df, target_column=target_column)
