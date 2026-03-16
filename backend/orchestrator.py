@@ -117,6 +117,7 @@ class Orchestrator:
                 task_type=detection["problem_type"],
                 dataset_type=detection["dataset_type"],
                 dataset_context=detection.get("dataset_context"),
+                source_path=str(detection.get("source_path") or file_path),
                 progress_callback=progress_callback,
             )
 
@@ -134,6 +135,7 @@ class Orchestrator:
                 cleaned_df=cleaned_df,
                 target_column=cleaned["target_column"],
                 task_type=detection["problem_type"],
+                dataset_type=detection["dataset_type"],
                 best_model=training["best_model"],
                 artifact_dirs=artifact_dirs,
             )

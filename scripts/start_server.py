@@ -7,9 +7,12 @@ import webbrowser
 from pathlib import Path
 from urllib.request import urlopen
 
+ROOT_DIR = Path(__file__).resolve().parent.parent
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
 from backend.config import APP_HOST, APP_PORT
 
-ROOT_DIR = Path(__file__).resolve().parent.parent
 FRONTEND_BUILD_DIR = ROOT_DIR / "frontend" / "build"
 APP_ORIGIN = f"http://{APP_HOST}:{APP_PORT}"
 

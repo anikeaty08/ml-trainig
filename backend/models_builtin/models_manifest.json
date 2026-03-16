@@ -3,17 +3,17 @@
     {
       "name": "fast-classifier",
       "label": "Fast Classifier",
-      "path": ""
+      "path": "C:\\Users\\anike\\Desktop\\agent\\backend\\models_builtin\\fast_classifier.pkl"
     },
     {
       "name": "accurate-classifier",
       "label": "Accurate Classifier",
-      "path": ""
+      "path": "C:\\Users\\anike\\Desktop\\agent\\backend\\models_builtin\\accurate_classifier.pkl"
     },
     {
       "name": "balanced-classifier",
       "label": "Balanced Classifier",
-      "path": ""
+      "path": "C:\\Users\\anike\\Desktop\\agent\\backend\\models_builtin\\balanced_classifier.pkl"
     }
   ]
 }

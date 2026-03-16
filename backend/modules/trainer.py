@@ -34,6 +34,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.svm import SVC, SVR
 
+from .advanced_models import train_optional_text_transformers, train_optional_timeseries_specialists
 from .deep_learning import train_optional_deep_models
 from ..utils.metrics import classification_metrics, primary_metric_name, regression_metrics
 
@@ -632,6 +633,26 @@ def _train_tabular_or_text(
             ),
         )
     )
+    if dataset_type == "text" and dataset_context and dataset_context.get("text_column"):
+        results.extend(
+            train_optional_text_transformers(
+                task_type=task_type,
+                text_column=dataset_context["text_column"],
+                X_train=X_train,
+                X_val=X_val,
+                X_test=X_test,
+                y_train=y_train,
+                y_val=y_val,
+                y_test=y_test,
+                train_val_X=train_val_X,
+                train_val_y=train_val_y,
+                progress_callback=(
+                    (lambda message, extra=None: progress_callback(message, 84, extra))
+                    if progress_callback
+                    else None
+                ),
+            )
+        )
     return _package_results(
         task_type=task_type,
         preprocessor=preprocessor,
@@ -674,6 +695,7 @@ def _train_timeseries(
     y_val = y.iloc[train_end:val_end].copy()
     X_test_model = X_model.iloc[val_end:].copy()
     y_test = y.iloc[val_end:].copy()
+    X_train_display = display_df.iloc[:train_end].copy()
     X_val_display = display_df.iloc[train_end:val_end].copy()
     X_test_display = display_df.iloc[val_end:].copy()
 
@@ -717,6 +739,27 @@ def _train_timeseries(
             ),
         )
     )
+    results.extend(
+        train_optional_timeseries_specialists(
+            X_train=X_train,
+            X_val=X_val_model,
+            X_test=X_test_model,
+            X_train_display=X_train_display,
+            X_val_display=X_val_display,
+            X_test_display=X_test_display,
+            y_train=y_train,
+            y_val=y_val,
+            y_test=y_test,
+            train_val_X=train_val_X_model,
+            train_val_y=train_val_y,
+            time_column=time_column,
+            progress_callback=(
+                (lambda message, extra=None: progress_callback(message, 86, extra))
+                if progress_callback
+                else None
+            ),
+        )
+    )
 
     for item in results:
         item["evaluation"]["X_test"] = X_test_display.copy()
@@ -744,6 +787,7 @@ def train_candidate_models(
     task_type: str,
     dataset_type: str = "tabular",
     dataset_context: dict[str, Any] | None = None,
+    source_path: str | None = None,
     progress_callback: ProgressCallback | None = None,
 ) -> dict[str, Any]:
     if dataset_type == "timeseries":
