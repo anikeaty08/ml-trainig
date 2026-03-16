@@ -42,9 +42,25 @@ The installer:
 7. Starts the frontend on `http://localhost:3000`
 8. Opens your browser automatically
 
+## Start after install
+
+### macOS / Linux
+
+```bash
+./start.sh
+```
+
+### Windows
+
+Double-click `start.bat` or run:
+
+```powershell
+.\start.ps1
+```
+
 ## Current MVP scope
 
-- Fully implemented: tabular CSV/TSV datasets, text-in-CSV datasets, and timestamped CSV forecasting datasets
+- Fully implemented: tabular CSV/TSV datasets, text-in-CSV datasets, timestamped CSV forecasting datasets, and ZIP archives of class-labeled images
 - Included models: logistic regression, random forest, extra trees, gradient boosting, histogram gradient boosting, SVM, KNN, naive Bayes, ridge/linear regression, and voting ensemble
 - Real-time job progress over WebSocket
 - Downloadable model, cleaned dataset, generated training code, HTML report, predictions, and comparison CSV

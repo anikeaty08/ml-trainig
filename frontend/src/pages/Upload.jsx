@@ -42,12 +42,16 @@ export default function Upload({ settings }) {
       <form className="card upload-card" onSubmit={handleSubmit}>
         <label className="upload-zone">
           <input
-            accept=".csv,.tsv,.txt"
+            accept=".csv,.tsv,.txt,.zip"
             onChange={(event) => setFile(event.target.files?.[0] || null)}
             type="file"
           />
           <strong>{file ? file.name : "Choose or drop a CSV/TSV dataset"}</strong>
-          <span>{file ? `${Math.round(file.size / 1024)} KB selected` : "Messy data is fine. The cleaner will handle it."}</span>
+          <span>
+            {file
+              ? `${Math.round(file.size / 1024)} KB selected`
+              : "CSV/TSV for tabular/text/time-series or ZIP archives of class-labeled images."}
+          </span>
         </label>
 
         <div className="upload-meta">

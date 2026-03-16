@@ -18,3 +18,4 @@
 - Tabular: mixed numeric/categorical CSVs for classification or regression
 - Text: CSVs with a strong text column plus a target label/value
 - Time series: CSVs with a datetime column plus a numeric target
+- Images: ZIP archives with class folders like `cats/*.png` and `dogs/*.png`

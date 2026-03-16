@@ -26,6 +26,20 @@ Set-ExecutionPolicy -Scope Process Bypass
 6. Builds the React frontend
 7. Starts backend and frontend servers
 
+## Start later
+
+### macOS / Linux
+
+```bash
+./start.sh
+```
+
+### Windows
+
+```powershell
+.\start.ps1
+```
+
 ## Requirements
 
 - Python 3.10+
