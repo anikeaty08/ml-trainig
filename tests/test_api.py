@@ -42,3 +42,12 @@ def test_available_models_endpoint_lists_full_stack_candidates():
     assert "XGBoost" in families
     assert "BERT" in families
     assert "Wav2Vec2" in families
+
+
+def test_setup_status_endpoint():
+    response = client.get("/api/setup/status")
+    assert response.status_code == 200
+    payload = response.json()
+    assert "profiles" in payload
+    assert "packs" in payload
+    assert "runtime" in payload

@@ -4,9 +4,6 @@ import json
 from pathlib import Path
 from typing import Any
 
-import httpx
-import pandas as pd
-
 from .. import database
 from ..modules.recommender import provider_catalog
 from .agent_routing import auth_profile_chain, model_chain, resolve_agent_policy
@@ -107,9 +104,11 @@ def _resolve_job(job_id: str | None) -> tuple[dict[str, Any] | None, dict[str, A
     return job, result
 
 
-def _dataset_frame(job: dict[str, Any] | None) -> pd.DataFrame | None:
+def _dataset_frame(job: dict[str, Any] | None) -> Any:
     if not job:
         return None
+    import pandas as pd
+
     path_candidates = [job.get("cleaned_data_path"), job.get("filepath")]
     for candidate in path_candidates:
         if not candidate:
@@ -242,6 +241,8 @@ def onboard_text(settings: dict[str, Any], provider_id: str | None = None) -> st
 
 
 async def list_remote_models(settings: dict[str, Any]) -> list[str]:
+    import httpx
+
     normalized = resolve_agent_policy(settings)
     provider = normalized.get("provider", "")
     profiles = auth_profile_chain(normalized, provider)
@@ -386,6 +387,8 @@ def _build_chat_payload(command: str, job_id: str | None) -> dict[str, Any]:
 
 
 async def dispatch_provider_command(command: str, settings: dict[str, Any], job_id: str | None = None) -> str:
+    import httpx
+
     normalized = resolve_agent_policy(settings)
     payload = _build_chat_payload(command, job_id)
 

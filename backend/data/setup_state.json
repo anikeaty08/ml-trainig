@@ -1,0 +1,18 @@
+{
+  "setup_complete": true,
+  "selected_profile": "core",
+  "selected_pack_ids": [
+    "core-tabular"
+  ],
+  "installed_pack_ids": [
+    "boosting-pack"
+  ],
+  "deferred_pack_ids": [
+    "core-tabular"
+  ],
+  "selected_provider_ids": [
+    "ollama"
+  ],
+  "download_now": true,
+  "updated_at": "2026-03-16T20:34:28.601455+00:00"
+}

@@ -1,4 +1,6 @@
-export default function Header({ jobCount, activeModelRef }) {
+export default function Header({ jobCount, activeModelRef, setupStatus }) {
+  const installedPackCount = setupStatus?.packs?.filter((item) => item.installed)?.length || 0;
+  const profileLabel = setupStatus?.selected_profile?.label || setupStatus?.setup_state?.selected_profile || "not set";
   return (
     <header className="app-header">
       <div>
@@ -9,6 +11,14 @@ export default function Header({ jobCount, activeModelRef }) {
         <div className="pill">
           <span>Jobs</span>
           <strong>{jobCount}</strong>
+        </div>
+        <div className="pill">
+          <span>Setup Profile</span>
+          <strong>{profileLabel}</strong>
+        </div>
+        <div className="pill">
+          <span>Installed Packs</span>
+          <strong>{installedPackCount}</strong>
         </div>
         <div className="pill accent">
           <span>Agent Model</span>

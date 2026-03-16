@@ -25,6 +25,28 @@ async function request(path, options = {}) {
 
 export const api = {
   getAvailableModels: () => request("/api/models/available"),
+  getSetupStatus: () => request("/api/setup/status"),
+  initializeSetup: ({ profileId, packIds, providerIds, downloadNow }) =>
+    request("/api/setup/initialize", {
+      method: "POST",
+      body: JSON.stringify({
+        profile_id: profileId,
+        pack_ids: packIds,
+        provider_ids: providerIds,
+        download_now: downloadNow
+      })
+    }),
+  getPacks: () => request("/api/packs"),
+  installPacks: (packIds) =>
+    request("/api/packs/install", {
+      method: "POST",
+      body: JSON.stringify({ pack_ids: packIds })
+    }),
+  removePack: (packId) =>
+    request("/api/packs/remove", {
+      method: "POST",
+      body: JSON.stringify({ pack_id: packId })
+    }),
   listJobs: () => request("/api/jobs"),
   deleteJob: (jobId) =>
     request(`/api/jobs/${jobId}`, {

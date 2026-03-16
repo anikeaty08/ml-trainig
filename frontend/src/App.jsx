@@ -1,12 +1,14 @@
 import { startTransition, useEffect, useMemo, useState } from "react";
-import { Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 
 import Header from "./components/Header";
 import Sidebar from "./components/Sidebar";
+import Downloads from "./pages/Downloads";
 import Dashboard from "./pages/Dashboard";
 import ModelSelection from "./pages/ModelSelection";
 import Processing from "./pages/Processing";
 import Results from "./pages/Results";
+import Setup from "./pages/Setup";
 import Upload from "./pages/Upload";
 import { usePolling } from "./hooks/usePolling";
 import { api } from "./services/api";
@@ -42,25 +44,29 @@ const defaultSettings = {
 };
 
 export default function App() {
+  const location = useLocation();
   const [jobs, setJobs] = useState([]);
   const [availableModels, setAvailableModels] = useState({ builtin_models: [], candidate_families: [] });
   const [providerCatalog, setProviderCatalog] = useState([]);
   const [settings, setSettings] = useState(defaultSettings);
   const [configLoaded, setConfigLoaded] = useState(false);
+  const [setupStatus, setSetupStatus] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
 
     async function loadMeta() {
-      const [models, providers, storedConfig] = await Promise.all([
+      const [models, providers, storedConfig, nextSetupStatus] = await Promise.all([
         api.getAvailableModels(),
         api.getProviders(),
-        api.getStoredConfig()
+        api.getStoredConfig(),
+        api.getSetupStatus()
       ]);
       if (!cancelled) {
         setAvailableModels(models);
         setProviderCatalog(providers.providers || []);
         setSettings({ ...defaultSettings, ...storedConfig });
+        setSetupStatus(nextSetupStatus);
         setConfigLoaded(true);
       }
     }
@@ -98,12 +104,22 @@ export default function App() {
     return settings.model.includes("/") ? settings.model : `${settings.provider}/${settings.model}`;
   }, [settings]);
 
+  function handleSetupUpdate(nextStatus) {
+    setSetupStatus(nextStatus);
+  }
+
+  const needsSetup = Boolean(setupStatus?.needs_setup);
+  const shouldRedirectToSetup = needsSetup && location.pathname !== "/setup";
+
   return (
     <div className="app-shell">
       <Sidebar />
       <main className="main-panel">
-        <Header activeModelRef={activeModelRef} jobCount={jobs.length} />
+        <Header activeModelRef={activeModelRef} jobCount={jobs.length} setupStatus={setupStatus} />
         <Routes>
+          {shouldRedirectToSetup ? <Route element={<Navigate replace to="/setup" />} path="*" /> : null}
+          <Route element={<Setup onSetupUpdate={handleSetupUpdate} providerCatalog={providerCatalog} setupStatus={setupStatus} />} path="/setup" />
+          <Route element={<Downloads onSetupUpdate={handleSetupUpdate} setupStatus={setupStatus} />} path="/downloads" />
           <Route
             element={
               <Dashboard
@@ -113,6 +129,7 @@ export default function App() {
                 onSettingsChange={setSettings}
                 providerCatalog={providerCatalog}
                 settings={settings}
+                setupStatus={setupStatus}
               />
             }
             path="/"

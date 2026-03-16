@@ -22,6 +22,7 @@ from .utils.agent_console import dispatch_provider_command, list_remote_models, 
 from .utils.agent_routing import normalize_agent_settings, resolve_agent_policy
 from .utils.dataset_sources import download_dataset_source
 from .utils.helpers import read_json_file
+from .utils.setup_manager import initialize_setup, install_packs, list_packs, remove_pack, runtime_snapshot, setup_status
 from .utils.storage import create_bundle_archive, delete_job_artifacts, save_upload
 from .utils.validators import validate_upload
 
@@ -57,8 +58,10 @@ def health() -> dict[str, str]:
 def available_models() -> dict[str, Any]:
     manifest_path = BUILTIN_MODELS_DIR / "models_manifest.json"
     manifest = read_json_file(manifest_path) if manifest_path.exists() else {"models": []}
+    status = setup_status()
     return {
         "builtin_models": manifest.get("models", []),
+        "packs": status["packs"],
         "candidate_families": [
             "Logistic Regression",
             "Linear Regression",
@@ -285,6 +288,47 @@ def get_agent_providers() -> dict[str, Any]:
     }
 
 
+@app.get("/api/setup/status")
+def get_setup_status() -> dict[str, Any]:
+    return setup_status()
+
+
+@app.post("/api/setup/initialize")
+def initialize_local_setup(payload: dict[str, Any]) -> dict[str, Any]:
+    profile_id = str(payload.get("profile_id", "")).strip()
+    pack_ids = payload.get("pack_ids") or []
+    provider_ids = payload.get("provider_ids") or ["ollama"]
+    download_now = bool(payload.get("download_now", False))
+    state = initialize_setup(
+        profile_id=profile_id,
+        pack_ids=[str(item) for item in pack_ids],
+        provider_ids=[str(item) for item in provider_ids],
+        download_now=download_now,
+    )
+    return {"status": "ok", "setup_state": state, "packs": list_packs()}
+
+
+@app.get("/api/packs")
+def get_packs() -> dict[str, Any]:
+    return {"packs": list_packs(), "runtime": runtime_snapshot(), "setup_state": setup_status()["setup_state"]}
+
+
+@app.post("/api/packs/install")
+def install_local_packs(payload: dict[str, Any]) -> dict[str, Any]:
+    pack_ids = [str(item) for item in (payload.get("pack_ids") or [])]
+    installed = install_packs(pack_ids)
+    return {"status": "ok", "installed_pack_ids": installed, "packs": list_packs(), "setup_state": setup_status()["setup_state"]}
+
+
+@app.post("/api/packs/remove")
+def remove_local_pack(payload: dict[str, Any]) -> dict[str, Any]:
+    pack_id = str(payload.get("pack_id", "")).strip()
+    if not pack_id:
+        raise HTTPException(status_code=400, detail="pack_id is required")
+    state = remove_pack(pack_id)
+    return {"status": "ok", "setup_state": state, "packs": list_packs()}
+
+
 @app.get("/api/agent/config")
 def get_agent_config() -> dict[str, Any]:
     return resolve_agent_policy(database.get_agent_config())
@@ -337,7 +381,7 @@ async def run_agent_command(payload: dict[str, Any]) -> dict[str, str]:
 
 @app.get("/api/meta/runtime")
 def runtime_meta() -> dict[str, Any]:
-    return {"app_port": APP_PORT, "app_origin": f"http://127.0.0.1:{APP_PORT}"}
+    return {"app_port": APP_PORT, "app_origin": f"http://127.0.0.1:{APP_PORT}", "resources": runtime_snapshot()}
 
 
 if FRONTEND_BUILD_DIR.exists():

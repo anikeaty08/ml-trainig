@@ -128,6 +128,20 @@ select {
   gap: 0.2rem;
 }
 
+.meta-grid,
+.profile-grid {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.meta-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.profile-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .pill.accent {
   background: var(--accent-soft);
 }
@@ -199,6 +213,24 @@ select {
 .job-link {
   display: grid;
   gap: 0.25rem;
+}
+
+.select-card {
+  padding: 1rem;
+  border-radius: 20px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.75);
+  display: grid;
+  gap: 0.45rem;
+}
+
+.select-card.selected {
+  border-color: rgba(12, 124, 89, 0.6);
+  background: rgba(12, 124, 89, 0.12);
+}
+
+.select-card input {
+  justify-self: start;
 }
 
 .console-card {
@@ -283,6 +315,12 @@ select {
   gap: 0.6rem;
   flex-wrap: wrap;
   margin-bottom: 1rem;
+}
+
+.toggle-row {
+  display: flex;
+  gap: 0.7rem;
+  align-items: center;
 }
 
 .profile-header {
@@ -403,7 +441,9 @@ pre {
   }
 
   .split-card,
-  .selector-grid {
+  .selector-grid,
+  .profile-grid,
+  .meta-grid {
     grid-template-columns: 1fr;
   }
 

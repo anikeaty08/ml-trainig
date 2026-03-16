@@ -8,11 +8,9 @@ from pathlib import Path
 
 from . import database
 from .utils.agent_console import HELP_TEXT as AGENT_HELP_TEXT, dispatch_provider_command, format_policy, list_remote_models, onboard_text, resolve_console_command
-from .orchestrator import Orchestrator
-from .jobs.state import JobStateManager
 from .utils.agent_routing import resolve_agent_policy
 from .utils.local_search import search_local_knowledge
-from .utils.storage import delete_job_artifacts, save_upload
+from .utils.setup_manager import initialize_setup, install_packs, list_packs, remove_pack, setup_status
 
 
 CLI_HELP_TEXT = (
@@ -29,6 +27,10 @@ CLI_HELP_TEXT = (
     "  profile add <provider> <label> <auth_mode> <base_url> [api_key]\n"
     "  profile list\n"
     "  profile remove <profile_id>\n"
+    "  setup\n"
+    "  packs\n"
+    "  pack install <pack_id>\n"
+    "  pack remove <pack_id>\n"
     "  jobs list\n"
     "  job show <job_id>\n"
     "  delete <job_id>\n"
@@ -122,6 +124,10 @@ def _remove_profile(profile_id: str) -> str:
 
 
 def _train_dataset(path_text: str) -> str:
+    from .jobs.state import JobStateManager
+    from .orchestrator import Orchestrator
+    from .utils.storage import save_upload
+
     source_path = Path(path_text).expanduser().resolve()
     if not source_path.exists():
         return f"Dataset not found: {source_path}"
@@ -147,6 +153,8 @@ def _train_dataset(path_text: str) -> str:
 
 
 def _delete_job(job_id: str) -> str:
+    from .utils.storage import delete_job_artifacts
+
     job = database.get_job(job_id)
     if not job:
         return f"Job not found: {job_id}"
@@ -216,6 +224,65 @@ def _scan_models() -> str:
     return "\n".join(f"{provider}/{model_name}" for model_name in models) or f"No remote models found for {provider}."
 
 
+def _packs_text() -> str:
+    packs = list_packs()
+    return "\n".join(
+        f"{pack['id']} | {'installed' if pack['installed'] else 'not-installed'} | {pack['size_mb']} MB | {pack['label']}"
+        for pack in packs
+    )
+
+
+def _run_setup_wizard() -> str:
+    status = setup_status()
+    profiles = status["profiles"]
+    packs = status["packs"]
+    providers = ["ollama", "openai", "anthropic", "google", "kimi", "openrouter", "lmstudio"]
+
+    _print("Local setup wizard")
+    _print(f"System recommendation: {status['runtime'].get('recommended_profile', 'core')}")
+    for index, profile in enumerate(profiles, start=1):
+        _print(f"{index}. {profile['label']} ({profile['id']}) - {profile['estimated_size_mb']} MB")
+    raw_choice = input("Choose profile [default 1]: ").strip()
+    try:
+        selected_profile = profiles[max(0, int(raw_choice or "1") - 1)]
+    except Exception:
+        selected_profile = profiles[0]
+
+    _print("Selected packs in this profile:")
+    for pack in packs:
+        if pack["id"] in selected_profile["pack_ids"]:
+            _print(f"- {pack['id']} ({pack['label']})")
+
+    custom = input("Add or remove packs manually? [y/N]: ").strip().lower()
+    selected_pack_ids = list(selected_profile["pack_ids"])
+    if custom in {"y", "yes"}:
+        _print("Available packs:")
+        for pack in packs:
+            _print(f"  {pack['id']} - {pack['label']}")
+        raw_packs = input("Enter comma-separated pack ids: ").strip()
+        if raw_packs:
+            selected_pack_ids = [item.strip() for item in raw_packs.split(",") if item.strip()]
+
+    _print("Suggested providers: " + ", ".join(providers))
+    raw_providers = input("Enter comma-separated providers [default ollama]: ").strip()
+    selected_provider_ids = [item.strip() for item in raw_providers.split(",") if item.strip()] if raw_providers else ["ollama"]
+    raw_download = input("Download selected packs now? [Y/n]: ").strip().lower()
+    download_now = raw_download not in {"n", "no"}
+
+    state = initialize_setup(
+        profile_id=selected_profile["id"],
+        pack_ids=selected_pack_ids,
+        provider_ids=selected_provider_ids,
+        download_now=download_now,
+    )
+    return (
+        "Setup saved.\n"
+        f"profile: {state['selected_profile']}\n"
+        f"packs: {', '.join(state['selected_pack_ids']) or 'none'}\n"
+        f"providers: {', '.join(state['selected_provider_ids']) or 'none'}"
+    )
+
+
 def handle_command(line: str) -> str:
     parts = shlex.split(line)
     if not parts:
@@ -230,6 +297,8 @@ def handle_command(line: str) -> str:
         return CLI_HELP_TEXT
     if command == "status":
         return _status_text()
+    if command == "setup":
+        return _run_setup_wizard()
     if command == "onboard":
         return onboard_text(_load_config(), parts[1] if len(parts) > 1 else None)
     if command == "config":
@@ -248,6 +317,14 @@ def handle_command(line: str) -> str:
         return _model_list_text()
     if command == "model" and len(parts) > 1 and parts[1] == "scan":
         return _scan_models()
+    if command == "packs":
+        return _packs_text()
+    if command == "pack" and len(parts) > 2 and parts[1] == "install":
+        installed = install_packs([parts[2]])
+        return f"Installed packs: {', '.join(installed) or 'none'}"
+    if command == "pack" and len(parts) > 2 and parts[1] == "remove":
+        state = remove_pack(parts[2])
+        return f"Removed {parts[2]}. Remaining installed packs: {', '.join(state.get('installed_pack_ids', [])) or 'none'}"
     if command == "jobs" and len(parts) > 1 and parts[1] == "list":
         jobs = database.list_jobs(limit=20)
         return "\n".join(f"{job['id']} | {job['status']} | {job['filename']}" for job in jobs) or "No jobs yet."
@@ -264,8 +341,13 @@ def handle_command(line: str) -> str:
 
 def repl() -> None:
     database.init_database()
+    status = setup_status()
     _print("ML Pipeline Agent Terminal")
     _print("Type help for commands. Natural language prompts go to the configured agent model chain.")
+    if status["needs_setup"]:
+        setup_prompt = input("No local setup profile has been saved yet. Run setup wizard now? [Y/n]: ").strip().lower()
+        if setup_prompt not in {"n", "no"}:
+            _print(_run_setup_wizard())
     while True:
         try:
             line = input("ml-agent> ").strip()

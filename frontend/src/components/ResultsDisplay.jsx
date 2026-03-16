@@ -5,6 +5,7 @@ export default function ResultsDisplay({ jobId, result }) {
   const summary = result?.summary_json || {};
   const metrics = result?.metrics_json || {};
   const detection = summary.detection || {};
+  const training = summary.training || {};
 
   return (
     <div className="stack">
@@ -78,6 +79,17 @@ export default function ResultsDisplay({ jobId, result }) {
         <div>
           <h3>Dataset analysis</h3>
           <pre>{JSON.stringify(summary.analysis || {}, null, 2)}</pre>
+        </div>
+      </section>
+
+      <section className="card split-card">
+        <div>
+          <h3>Training workflow</h3>
+          <pre>{JSON.stringify(training, null, 2)}</pre>
+        </div>
+        <div>
+          <h3>Error analysis</h3>
+          <pre>{JSON.stringify(summary.error_analysis || {}, null, 2)}</pre>
         </div>
       </section>
     </div>
