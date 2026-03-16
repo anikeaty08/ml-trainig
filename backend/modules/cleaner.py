@@ -94,3 +94,62 @@ def clean_tabular_dataset(df: pd.DataFrame, target_column: str | None) -> dict[s
             "quality_after": _quality_score(cleaned),
         },
     }
+
+
+def clean_text_dataset(
+    df: pd.DataFrame,
+    *,
+    target_column: str,
+    text_column: str,
+) -> dict[str, Any]:
+    cleaned = clean_tabular_dataset(df, target_column=target_column)
+    text_df = cleaned["dataframe"].copy()
+    before_rows = len(text_df)
+    text_df[text_column] = text_df[text_column].fillna("").astype(str).str.replace(r"\s+", " ", regex=True).str.strip()
+    text_df = text_df[text_df[text_column].str.len() > 0].reset_index(drop=True)
+    removed_empty = before_rows - len(text_df)
+    if removed_empty:
+        cleaned["actions"].append(f"Removed {removed_empty} rows with empty text in {text_column}")
+    cleaned["dataframe"] = text_df
+    cleaned["summary"]["rows_after"] = int(text_df.shape[0])
+    cleaned["summary"]["quality_after"] = _quality_score(text_df)
+    return cleaned
+
+
+def clean_timeseries_dataset(
+    df: pd.DataFrame,
+    *,
+    target_column: str,
+    time_column: str,
+) -> dict[str, Any]:
+    cleaned = clean_tabular_dataset(df, target_column=target_column)
+    ts_df = cleaned["dataframe"].copy()
+    parsed_time = pd.to_datetime(ts_df[time_column], errors="coerce", utc=False)
+    invalid_time = int(parsed_time.isna().sum())
+    ts_df[time_column] = parsed_time
+    ts_df = ts_df.dropna(subset=[time_column]).sort_values(time_column).reset_index(drop=True)
+    if invalid_time:
+        cleaned["actions"].append(f"Dropped {invalid_time} rows with invalid timestamps in {time_column}")
+    duplicate_timestamps = int(ts_df.duplicated(subset=[time_column]).sum())
+    if duplicate_timestamps:
+        ts_df = ts_df.drop_duplicates(subset=[time_column], keep="last").reset_index(drop=True)
+        cleaned["actions"].append(f"Collapsed {duplicate_timestamps} duplicate timestamps in {time_column}")
+    cleaned["dataframe"] = ts_df
+    cleaned["summary"]["rows_after"] = int(ts_df.shape[0])
+    cleaned["summary"]["quality_after"] = _quality_score(ts_df)
+    return cleaned
+
+
+def clean_dataset(
+    df: pd.DataFrame,
+    *,
+    target_column: str | None,
+    dataset_type: str,
+    dataset_context: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    context = dataset_context or {}
+    if dataset_type == "text" and target_column and context.get("text_column"):
+        return clean_text_dataset(df, target_column=target_column, text_column=context["text_column"])
+    if dataset_type == "timeseries" and target_column and context.get("time_column"):
+        return clean_timeseries_dataset(df, target_column=target_column, time_column=context["time_column"])
+    return clean_tabular_dataset(df, target_column=target_column)

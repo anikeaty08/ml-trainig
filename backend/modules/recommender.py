@@ -39,6 +39,33 @@ def provider_catalog() -> list[dict[str, Any]]:
 def recommend_model_families(analysis: dict[str, Any], task_type: str) -> dict[str, Any]:
     rows = analysis["shape"]["rows"]
     categorical_count = analysis["categorical_feature_count"]
+    dataset_type = analysis.get("dataset_type", "tabular")
+
+    if dataset_type == "text":
+        recommended = [
+            {"name": "Logistic Regression + TF-IDF", "reason": "Strong text baseline with good interpretability"},
+            {"name": "Linear SVM-style margin models", "reason": "Often competitive on sparse text features"},
+            {"name": "Ridge / Linear Regression + TF-IDF", "reason": "Good fast baseline for text regression"},
+            {"name": "Random Forest on text embeddings/features", "reason": "Useful non-linear comparison once text is vectorized"},
+        ]
+        return {
+            "recommended": recommended,
+            "not_recommended": [{"name": "KNN", "reason": "Sparse text spaces usually make it noisy and slow"}],
+            "dataset_fit": analysis["dataset_fitness"],
+        }
+
+    if dataset_type == "timeseries":
+        recommended = [
+            {"name": "Lagged Linear/Ridge Regression", "reason": "Strong interpretable forecasting baseline"},
+            {"name": "Random Forest Regressor", "reason": "Useful for non-linear lag interactions"},
+            {"name": "Histogram Gradient Boosting Regressor", "reason": "Strong local forecasting candidate"},
+            {"name": "Voting Ensemble", "reason": "Combines multiple lag-based forecasters"},
+        ]
+        return {
+            "recommended": recommended,
+            "not_recommended": [{"name": "Shuffle-based CV models", "reason": "Temporal ordering must be respected"}],
+            "dataset_fit": analysis["dataset_fitness"],
+        }
 
     if task_type == "classification":
         recommended = [

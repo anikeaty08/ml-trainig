@@ -7,7 +7,14 @@ import pandas as pd
 from pandas.api.types import is_numeric_dtype
 
 
-def analyze_dataset(df: pd.DataFrame, target_column: str, task_type: str) -> dict[str, Any]:
+def analyze_dataset(
+    df: pd.DataFrame,
+    target_column: str,
+    task_type: str,
+    dataset_type: str = "tabular",
+    dataset_context: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    context = dataset_context or {}
     numeric_columns = [column for column in df.columns if column != target_column and is_numeric_dtype(df[column])]
     categorical_columns = [column for column in df.columns if column not in numeric_columns and column != target_column]
     target = df[target_column]
@@ -46,13 +53,41 @@ def analyze_dataset(df: pd.DataFrame, target_column: str, task_type: str) -> dic
         fitness.append("Categorical signal detected; encoded pipelines will be used")
     if not any("date" in column.lower() or "time" in column.lower() for column in df.columns):
         fitness.append("Not ideal for time-series forecasting because temporal columns were not detected")
+    if dataset_type == "text" and context.get("text_column"):
+        text_column = context["text_column"]
+        text_lengths = df[text_column].astype(str).str.len()
+        fitness.append("Text column detected; TF-IDF style modeling is available")
+        text_summary = {
+            "text_column": text_column,
+            "avg_char_length": round(float(text_lengths.mean()), 2),
+            "max_char_length": int(text_lengths.max()),
+        }
+    else:
+        text_summary = {}
+
+    if dataset_type == "timeseries" and context.get("time_column"):
+        time_column = context["time_column"]
+        time_series = pd.to_datetime(df[time_column], errors="coerce")
+        deltas = time_series.sort_values().diff().dropna()
+        timeseries_summary = {
+            "time_column": time_column,
+            "start": str(time_series.min()),
+            "end": str(time_series.max()),
+            "median_step_seconds": float(deltas.median().total_seconds()) if not deltas.empty else None,
+        }
+        fitness.append("Temporal ordering detected; sequential forecasting is available")
+    else:
+        timeseries_summary = {}
 
     return {
         "shape": {"rows": int(df.shape[0]), "columns": int(df.shape[1])},
+        "dataset_type": dataset_type,
         "numeric_feature_count": len(numeric_columns),
         "categorical_feature_count": len(categorical_columns),
         "target_summary": target_summary,
         "top_numeric_correlations": numeric_correlations[:10],
+        "text_summary": text_summary,
+        "timeseries_summary": timeseries_summary,
         "numeric_profile": [
             {
                 "feature": column,

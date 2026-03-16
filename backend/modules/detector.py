@@ -16,6 +16,40 @@ def _read_dataframe(path: Path) -> pd.DataFrame:
     return pd.read_csv(path)
 
 
+def _datetime_candidates(df: pd.DataFrame) -> list[str]:
+    candidates: list[str] = []
+    for column in df.columns:
+        series = df[column]
+        if is_numeric_dtype(series):
+            continue
+        sample = series.dropna().astype(str).head(250)
+        if sample.empty:
+            continue
+        parsed = pd.to_datetime(sample, errors="coerce", utc=False)
+        success_ratio = parsed.notna().mean()
+        if success_ratio >= 0.8 or any(token in column.lower() for token in ("date", "time", "timestamp")):
+            candidates.append(column)
+    return candidates
+
+
+def _text_candidates(df: pd.DataFrame, target_column: str | None) -> list[str]:
+    candidates: list[str] = []
+    for column in df.columns:
+        if column == target_column:
+            continue
+        series = df[column]
+        if is_numeric_dtype(series):
+            continue
+        sample = series.dropna().astype(str)
+        if sample.empty:
+            continue
+        average_length = sample.str.len().mean()
+        unique_ratio = sample.nunique(dropna=True) / max(len(sample), 1)
+        if average_length >= 24 and unique_ratio >= 0.25:
+            candidates.append(column)
+    return candidates
+
+
 def _looks_like_identifier(series: pd.Series, name: str) -> bool:
     non_null = series.dropna()
     if non_null.empty:
@@ -68,16 +102,35 @@ def detect_dataset(path: Path) -> dict[str, Any]:
     dataframe = _read_dataframe(path)
     target_column = infer_target_column(dataframe)
     problem_type = infer_problem_type(dataframe, target_column)
+    datetime_columns = _datetime_candidates(dataframe)
+    text_columns = _text_candidates(dataframe, target_column)
+
+    dataset_type = "tabular"
+    dataset_context: dict[str, Any] = {
+        "datetime_columns": datetime_columns,
+        "text_columns": text_columns,
+    }
+    if target_column and problem_type == "regression" and datetime_columns:
+        dataset_type = "timeseries"
+        dataset_context["time_column"] = datetime_columns[0]
+    elif target_column and text_columns:
+        dataset_type = "text"
+        dataset_context["text_column"] = text_columns[0]
+
     return {
-        "dataset_type": "tabular",
+        "dataset_type": dataset_type,
         "problem_type": problem_type,
         "target_column": target_column,
         "dataframe": dataframe,
+        "dataset_context": dataset_context,
         "preview_summary": {
             "filename": path.name,
             "rows": int(dataframe.shape[0]),
             "columns": int(dataframe.shape[1]),
             "target_column": target_column,
             "problem_type": problem_type,
+            "dataset_type": dataset_type,
+            "time_column": dataset_context.get("time_column"),
+            "text_column": dataset_context.get("text_column"),
         },
     }
