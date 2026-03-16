@@ -89,6 +89,16 @@ def analyze_dataset(
     else:
         image_summary = {}
 
+    if dataset_type == "audio":
+        audio_summary = {
+            "audio_count": context.get("audio_count", int(df.shape[0])),
+            "class_distribution": context.get("class_distribution", {}),
+            "label_strategy": context.get("label_strategy", "derived"),
+        }
+        fitness.append("Audio archive detected; spectrogram-style local features were extracted for classification")
+    else:
+        audio_summary = {}
+
     return {
         "shape": {"rows": int(df.shape[0]), "columns": int(df.shape[1])},
         "dataset_type": dataset_type,
@@ -99,6 +109,7 @@ def analyze_dataset(
         "text_summary": text_summary,
         "timeseries_summary": timeseries_summary,
         "image_summary": image_summary,
+        "audio_summary": audio_summary,
         "numeric_profile": [
             {
                 "feature": column,

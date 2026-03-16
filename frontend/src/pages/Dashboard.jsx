@@ -1,9 +1,30 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 
 import AgentConsole from "../components/AgentConsole";
+import { api } from "../services/api";
 
-export default function Dashboard({ jobs, availableModels, settings, onSettingsChange, providerCatalog }) {
+export default function Dashboard({ jobs, availableModels, settings, onJobsRefresh, onSettingsChange, providerCatalog }) {
   const latestJobs = jobs.slice(0, 5);
+  const [deleteError, setDeleteError] = useState("");
+  const [deletingJobId, setDeletingJobId] = useState("");
+
+  async function handleDelete(job) {
+    const confirmed = window.confirm(`Delete ${job.filename} and all local artifacts for job ${job.id}?`);
+    if (!confirmed) {
+      return;
+    }
+    setDeletingJobId(job.id);
+    setDeleteError("");
+    try {
+      await api.deleteJob(job.id);
+      await onJobsRefresh?.();
+    } catch (error) {
+      setDeleteError(error.message);
+    } finally {
+      setDeletingJobId("");
+    }
+  }
 
   return (
     <div className="stack">
@@ -30,24 +51,30 @@ export default function Dashboard({ jobs, availableModels, settings, onSettingsC
       <section className="card split-card">
         <div>
           <h3>Recent jobs</h3>
+          {deleteError ? <p className="error-text">{deleteError}</p> : null}
           <div className="job-list">
             {latestJobs.length === 0 ? <p>No jobs yet.</p> : null}
             {latestJobs.map((job) => (
-              <Link className="job-row" key={job.id} to={`/results/${job.id}`}>
-                <strong>{job.filename}</strong>
-                <span>{job.status}</span>
-                <span>{job.stage}</span>
-              </Link>
+              <article className="job-row" key={job.id}>
+                <Link className="job-link" to={`/results/${job.id}`}>
+                  <strong>{job.filename}</strong>
+                  <span>{job.status}</span>
+                  <span>{job.stage}</span>
+                </Link>
+                <button className="button secondary slim-button" disabled={deletingJobId === job.id} onClick={() => handleDelete(job)} type="button">
+                  {deletingJobId === job.id ? "Deleting..." : "Delete"}
+                </button>
+              </article>
             ))}
           </div>
         </div>
         <div>
-          <h3>Built-in model presets</h3>
+          <h3>Automatic training families</h3>
           <div className="preset-list">
-            {(availableModels.builtin_models || []).map((item) => (
+            {(availableModels.candidate_families || []).map((item) => (
               <article className="preset-card" key={item.name}>
-                <strong>{item.label}</strong>
-                <p>{item.description || item.path}</p>
+                <strong>{item}</strong>
+                <p>The pipeline decides when to use this family and compares it against the rest.</p>
               </article>
             ))}
           </div>

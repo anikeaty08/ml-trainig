@@ -142,6 +142,19 @@ def recommend_model_families(analysis: dict[str, Any], task_type: str) -> dict[s
             "dataset_fit": analysis["dataset_fitness"],
         }
 
+    if dataset_type == "audio":
+        recommended = [
+            {"name": "Spectrogram + CNN", "reason": "Natural deep-learning comparison if TensorFlow or PyTorch is installed"},
+            {"name": "Random Forest on spectrogram features", "reason": "Strong local baseline on engineered audio features"},
+            {"name": "Gradient Boosting on spectrogram features", "reason": "Useful non-linear comparison on audio descriptors"},
+            {"name": "Wav2Vec2", "reason": "Transformer-style audio comparison when the full stack is installed"},
+        ]
+        return {
+            "recommended": recommended,
+            "not_recommended": [{"name": "Naive Bayes", "reason": "Audio patterns usually need richer decision boundaries"}],
+            "dataset_fit": analysis["dataset_fitness"],
+        }
+
     if task_type == "classification":
         recommended = [
             {"name": "Logistic Regression", "reason": "Strong baseline and sanity check"},

@@ -88,6 +88,7 @@ export default function AgentConsole({ currentJobId, settings, onSettingsChange,
     () => providerCatalog.find((item) => item.id === settings.provider) || providerCatalog[0],
     [providerCatalog, settings.provider]
   );
+  const suggestedModels = provider?.suggested_models || [];
 
   useEffect(() => {
     setProfileForm((current) => ({
@@ -197,19 +198,18 @@ export default function AgentConsole({ currentJobId, settings, onSettingsChange,
     return Promise.resolve(false);
   }
 
-  async function runCommand(event) {
-    event.preventDefault();
+  async function executeCommand(nextCommand) {
     setLoading(true);
     try {
-      if (command.trim().startsWith("/model")) {
-        const handled = await handleLocalModelCommand(command);
+      if (nextCommand.trim().startsWith("/model")) {
+        const handled = await handleLocalModelCommand(nextCommand);
         if (handled) {
           return;
         }
       }
 
       const payload = await api.runConsoleCommand({
-        command,
+        command: nextCommand,
         settings,
         jobId: currentJobId
       });
@@ -219,6 +219,11 @@ export default function AgentConsole({ currentJobId, settings, onSettingsChange,
     } finally {
       setLoading(false);
     }
+  }
+
+  async function runCommand(event) {
+    event.preventDefault();
+    await executeCommand(command);
   }
 
   function addProfile() {
@@ -386,6 +391,41 @@ export default function AgentConsole({ currentJobId, settings, onSettingsChange,
             placeholder="Optional note for browser-login flow"
           />
         </label>
+      </div>
+
+      <section className="provider-panel">
+        <div>
+          <p className="eyebrow">Selected provider</p>
+          <h4>{provider?.label || settings.provider}</h4>
+          <p>{provider?.onboarding_hint || "Configure a local or hosted provider for chat assistance."}</p>
+          <p>
+            Capabilities: {(provider?.capabilities || []).join(", ") || "chat"} | Auth modes:{" "}
+            {(provider?.auth_modes || []).join(", ") || "local"}
+          </p>
+        </div>
+        <div className="chip-row">
+          {suggestedModels.map((modelRef) => (
+            <button className="button secondary slim-button" key={modelRef} onClick={() => updateSettings(applyPrimaryModelRef(settings, modelRef), `Primary model updated to ${modelRef}`)} type="button">
+              {modelRef}
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <div className="quick-actions">
+        {["/onboard", "/model status", "/model scan", "/jobs", "/dataset summary"].map((value) => (
+          <button
+            className="button secondary slim-button"
+            key={value}
+            onClick={() => {
+              setCommand(value);
+              executeCommand(value).catch(() => {});
+            }}
+            type="button"
+          >
+            {value}
+          </button>
+        ))}
       </div>
 
       <div className="route-preview">

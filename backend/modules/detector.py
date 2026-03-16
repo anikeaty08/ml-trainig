@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
+import zipfile
 
 import pandas as pd
 from pandas.api.types import is_numeric_dtype
 
+from .audio_pipeline import AUDIO_EXTENSIONS, detect_audio_archive
 from .image_pipeline import detect_image_archive
 
 
@@ -97,8 +99,26 @@ def infer_problem_type(df: pd.DataFrame, target_column: str | None) -> str:
     return "regression"
 
 
+def _archive_dataset_type(path: Path) -> str:
+    image_count = 0
+    audio_count = 0
+    with zipfile.ZipFile(path) as archive:
+        for name in archive.namelist():
+            suffix = Path(name).suffix.lower()
+            if suffix in AUDIO_EXTENSIONS:
+                audio_count += 1
+            if suffix in {".jpg", ".jpeg", ".png", ".bmp", ".webp"}:
+                image_count += 1
+    if audio_count and audio_count >= image_count:
+        return "audio"
+    return "image"
+
+
 def detect_dataset(path: Path) -> dict[str, Any]:
     if path.suffix.lower() == ".zip":
+        archive_type = _archive_dataset_type(path)
+        if archive_type == "audio":
+            return detect_audio_archive(path)
         return detect_image_archive(path)
 
     if path.suffix.lower() not in {".csv", ".tsv", ".txt"}:

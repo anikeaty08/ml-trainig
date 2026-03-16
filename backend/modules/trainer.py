@@ -34,6 +34,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.svm import SVC, SVR
 
+from .deep_learning import train_optional_deep_models
 from ..utils.metrics import classification_metrics, primary_metric_name, regression_metrics
 
 
@@ -579,6 +580,21 @@ def _train_tabular_or_text(
         cv=cv,
         progress_callback=progress_callback,
     )
+    results.extend(
+        train_optional_deep_models(
+            preprocessor=preprocessor,
+            X_train=X_train,
+            X_val=X_val,
+            X_test=X_test,
+            y_train=y_train,
+            y_val=y_val,
+            y_test=y_test,
+            train_val_X=train_val_X,
+            train_val_y=train_val_y,
+            task_type=task_type,
+            dataset_type=dataset_type,
+        )
+    )
     return _package_results(
         task_type=task_type,
         preprocessor=preprocessor,
@@ -643,6 +659,21 @@ def _train_timeseries(
         task_type="regression",
         cv=cv,
         progress_callback=progress_callback,
+    )
+    results.extend(
+        train_optional_deep_models(
+            preprocessor=preprocessor,
+            X_train=X_train,
+            X_val=X_val_model,
+            X_test=X_test_model,
+            y_train=y_train,
+            y_val=y_val,
+            y_test=y_test,
+            train_val_X=train_val_X_model,
+            train_val_y=train_val_y,
+            task_type="regression",
+            dataset_type="timeseries",
+        )
     )
 
     for item in results:

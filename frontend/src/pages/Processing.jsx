@@ -3,7 +3,9 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 
 import ProgressBar from "../components/ProgressBar";
 
-const API_URL = process.env.REACT_APP_API_URL || "http://localhost:8000";
+const API_URL =
+  process.env.REACT_APP_API_URL ||
+  (typeof window !== "undefined" ? window.location.origin : "http://127.0.0.1:38475");
 
 export default function Processing() {
   const navigate = useNavigate();

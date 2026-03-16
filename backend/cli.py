@@ -7,13 +7,34 @@ import uuid
 from pathlib import Path
 
 from . import database
-from .utils.agent_console import HELP_TEXT, dispatch_provider_command, format_policy, list_remote_models, onboard_text, resolve_console_command
-from .modules.recommender import provider_catalog
+from .utils.agent_console import HELP_TEXT as AGENT_HELP_TEXT, dispatch_provider_command, format_policy, list_remote_models, onboard_text, resolve_console_command
 from .orchestrator import Orchestrator
 from .jobs.state import JobStateManager
 from .utils.agent_routing import resolve_agent_policy
 from .utils.local_search import search_local_knowledge
 from .utils.storage import delete_job_artifacts, save_upload
+
+
+CLI_HELP_TEXT = (
+    f"{AGENT_HELP_TEXT}\n\n"
+    "Terminal-only commands\n"
+    "  status\n"
+    "  config show\n"
+    "  config set provider <provider>\n"
+    "  config set primary <provider/model>\n"
+    "  config set image <provider/model>\n"
+    "  config set fallback <provider/model,provider/model>\n"
+    "  config set allow <provider/model,provider/model>\n"
+    "  config set auth <local|api_key|browser_login|oauth>\n"
+    "  profile add <provider> <label> <auth_mode> <base_url> [api_key]\n"
+    "  profile list\n"
+    "  profile remove <profile_id>\n"
+    "  jobs list\n"
+    "  job show <job_id>\n"
+    "  delete <job_id>\n"
+    "  train <path-to-dataset>\n"
+    "  exit\n"
+)
 
 
 def _print(text: str) -> None:
@@ -188,10 +209,6 @@ def _set_config(parts: list[str]) -> str:
     return f"Updated config.\nprimary: {saved['primary_model_ref']}\nimage: {saved['image_model_ref']}"
 
 
-def _provider_help() -> str:
-    return "\n\n".join(onboard_text(_load_config(), item["id"]) for item in provider_catalog())
-
-
 def _scan_models() -> str:
     config = _load_config()
     models = asyncio.run(list_remote_models(config))
@@ -210,7 +227,7 @@ def handle_command(line: str) -> str:
         return local_response
 
     if command == "help":
-        return HELP_TEXT
+        return CLI_HELP_TEXT
     if command == "status":
         return _status_text()
     if command == "onboard":

@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 from pandas.api.types import is_numeric_dtype
 
+from .audio_pipeline import clean_audio_dataset
 from .image_pipeline import clean_image_dataset
 
 
@@ -151,6 +152,10 @@ def clean_dataset(
     source_path: str | None = None,
 ) -> dict[str, Any]:
     context = dataset_context or {}
+    if dataset_type == "audio":
+        if not source_path:
+            raise ValueError("Audio datasets require a source_path")
+        return clean_audio_dataset(source_path, target_column=target_column or "label")
     if dataset_type == "image":
         if not source_path:
             raise ValueError("Image datasets require a source_path")

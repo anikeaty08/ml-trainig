@@ -7,9 +7,10 @@ export default function ModelSelection({ settings, onSettingsChange, providerCat
         <p className="eyebrow">Provider-first routing</p>
         <h2>Agent model selection</h2>
         <p>
-          This follows the OpenClaw-style pattern more closely now: primary model, image model, fallback chain,
-          allowlist, and provider auth profiles. Settings are saved in browser localStorage on this machine and passed
-          to the backend only when needed for commands or runs.
+          This is the agent configuration surface, not the training-model picker. The ML pipeline runs the relevant
+          training families automatically; this panel only configures how the chat agent talks to providers like Ollama,
+          OpenAI, Claude, Gemini, or Kimi. Settings are stored on the device through the local backend database rather
+          than browser localStorage.
         </p>
       </section>
 
