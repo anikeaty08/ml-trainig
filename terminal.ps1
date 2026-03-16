@@ -8,4 +8,8 @@ if (-not (Test-Path $VenvDir)) {
 }
 
 . (Join-Path $VenvDir "Scripts\\Activate.ps1")
-python -m backend.cli
+$forwardArgs = @()
+if ($args.Count -gt 0) {
+    $forwardArgs = $args
+}
+python -m backend.cli @forwardArgs

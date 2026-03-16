@@ -8,9 +8,25 @@ from datetime import datetime, timezone
 from typing import Any, Iterable
 
 from .config import DB_PATH, ensure_directories
+from .utils.agent_routing import LEGACY_DEFAULT_CONFIG
 
 
 DB_LOCK = threading.Lock()
+
+UNCONFIGURED_AGENT_CONFIG = {
+    "provider": "",
+    "auth_mode": "local",
+    "base_url": "",
+    "primary_model_ref": "",
+    "image_model_ref": "",
+    "fallback_model_refs": [],
+    "model_allowlist": [],
+    "model_catalog": [],
+    "auth_profiles": [],
+    "auth_order": {},
+    "browser_session_hint": "",
+    "api_key": "",
+}
 
 
 def utc_now() -> str:
@@ -102,7 +118,7 @@ def init_database() -> None:
                 """
                 INSERT OR IGNORE INTO agent_settings
                 (id, provider, model, base_url, auth_mode, api_key, browser_session_hint, updated_at)
-                VALUES (1, 'ollama', '', 'http://127.0.0.1:11434', 'local', '', '', ?)
+                VALUES (1, '', '', '', 'local', '', '', ?)
                 """,
                 (utc_now(),),
             )
@@ -113,25 +129,47 @@ def init_database() -> None:
                 VALUES (1, ?, ?)
                 """,
                 (
-                    json.dumps(
-                        {
-                            "provider": "ollama",
-                            "auth_mode": "local",
-                            "base_url": "http://127.0.0.1:11434",
-                            "primary_model_ref": "ollama/llama3.2",
-                            "image_model_ref": "ollama/llava:7b",
-                            "fallback_model_refs": "",
-                            "model_allowlist": "",
-                            "model_catalog": [],
-                            "auth_profiles": [],
-                            "auth_order": {},
-                            "browser_session_hint": "",
-                            "api_key": "",
-                        }
-                    ),
+                    json.dumps(UNCONFIGURED_AGENT_CONFIG),
                     utc_now(),
                 ),
             )
+            _migrate_legacy_agent_defaults(connection)
+
+
+def _migrate_legacy_agent_defaults(connection: sqlite3.Connection) -> None:
+    legacy_settings = connection.execute(
+        "SELECT provider, model, base_url, auth_mode, api_key, browser_session_hint FROM agent_settings WHERE id = 1"
+    ).fetchone()
+    if legacy_settings and dict(legacy_settings) == {
+        "provider": "ollama",
+        "model": "",
+        "base_url": "http://127.0.0.1:11434",
+        "auth_mode": "local",
+        "api_key": "",
+        "browser_session_hint": "",
+    }:
+        connection.execute(
+            """
+            UPDATE agent_settings
+            SET provider = '', model = '', base_url = '', auth_mode = 'local', api_key = '', browser_session_hint = '', updated_at = ?
+            WHERE id = 1
+            """,
+            (utc_now(),),
+        )
+
+    legacy_config = connection.execute("SELECT config_json FROM agent_config WHERE id = 1").fetchone()
+    if not legacy_config:
+        return
+    try:
+        payload = json.loads(legacy_config["config_json"])
+    except Exception:
+        return
+    comparable = {key: payload.get(key) for key in LEGACY_DEFAULT_CONFIG}
+    if comparable == LEGACY_DEFAULT_CONFIG:
+        connection.execute(
+            "UPDATE agent_config SET config_json = ?, updated_at = ? WHERE id = 1",
+            (json.dumps(UNCONFIGURED_AGENT_CONFIG), utc_now()),
+        )
 
 
 def _serialize(value: Any) -> Any:

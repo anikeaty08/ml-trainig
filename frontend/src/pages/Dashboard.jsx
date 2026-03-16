@@ -42,8 +42,8 @@ export default function Dashboard({ jobs, availableModels, settings, onJobsRefre
           <Link className="button" to="/upload">
             Upload dataset
           </Link>
-          <Link className="button secondary" to="/models">
-            Configure agent models
+          <Link className="button secondary" to="/terminal">
+            Open chat terminal
           </Link>
         </div>
       </section>
@@ -70,6 +70,10 @@ export default function Dashboard({ jobs, availableModels, settings, onJobsRefre
         </div>
         <div>
           <h3>Automatic training families</h3>
+          <p className="subtle-copy">
+            These are the ML models the pipeline may train on your dataset automatically. They are separate from the
+            chat-agent model you configure in the terminal.
+          </p>
           <div className="preset-list">
             {(availableModels.candidate_families || []).map((item) => (
               <article className="preset-card" key={item}>

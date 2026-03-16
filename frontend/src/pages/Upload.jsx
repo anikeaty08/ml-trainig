@@ -57,6 +57,12 @@ export default function Upload({ settings }) {
           The pipeline will infer the target column, decide whether the dataset is tabular, text-heavy, or time-series,
           then clean it, evaluate multiple models, and produce a ranked report automatically.
         </p>
+        <div className="setup-steps">
+          <strong>Accepted dataset sources</strong>
+          <p>Local files: `.csv`, `.tsv`, `.txt`, and `.zip` archives.</p>
+          <p>Direct URLs: paste a raw download URL.</p>
+          <p>Kaggle: paste a dataset URL, a competition URL, a bare ref like `owner/dataset`, or a `kagglehub.dataset_download(...)` snippet.</p>
+        </div>
       </section>
 
       <form className="card upload-card" onSubmit={handleFileSubmit}>
@@ -70,7 +76,7 @@ export default function Upload({ settings }) {
           <span>
             {file
               ? `${Math.round(file.size / 1024)} KB selected`
-              : "CSV/TSV for tabular/text/time-series or ZIP archives of class-labeled images."}
+              : "CSV/TSV/TXT for tabular, text, and time-series data, or ZIP archives for image/audio datasets."}
           </span>
         </label>
 
@@ -93,14 +99,18 @@ export default function Upload({ settings }) {
 
       <form className="card upload-card" onSubmit={handleUrlSubmit}>
         <p className="eyebrow">Dataset URL</p>
-        <h3>Pull from URL or Kaggle link</h3>
-        <p>Paste a direct dataset URL or a Kaggle dataset/competition link. The app will download it locally, then run the same autonomous pipeline.</p>
+        <h3>Pull from URL, Kaggle, or KaggleHub ref</h3>
+        <p>
+          Paste a direct dataset URL, a Kaggle dataset/competition link, a bare Kaggle ref like
+          `rhythmghai/300k-student-performance-prediction-dataset`, or the full `kagglehub.dataset_download(...)`
+          snippet. The app will download it locally first, then run the same autonomous pipeline.
+        </p>
         <label>
           Dataset URL
           <input
             onChange={(event) => setDatasetUrl(event.target.value)}
-            placeholder="https://... or https://www.kaggle.com/datasets/..."
-            type="url"
+            placeholder='https://..., https://www.kaggle.com/datasets/..., owner/dataset, or kagglehub.dataset_download("owner/dataset")'
+            type="text"
             value={datasetUrl}
           />
         </label>

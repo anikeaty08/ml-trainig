@@ -9,16 +9,17 @@ import ModelSelection from "./pages/ModelSelection";
 import Processing from "./pages/Processing";
 import Results from "./pages/Results";
 import Setup from "./pages/Setup";
+import Terminal from "./pages/Terminal";
 import Upload from "./pages/Upload";
 import { usePolling } from "./hooks/usePolling";
 import { api } from "./services/api";
 
 const defaultSettings = {
-  provider: "ollama",
+  provider: "",
   auth_mode: "local",
-  base_url: "http://127.0.0.1:11434",
-  primary_model_ref: "ollama/llama3.2",
-  image_model_ref: "ollama/llava:7b",
+  base_url: "",
+  primary_model_ref: "",
+  image_model_ref: "",
   model: "",
   fallback_models: "",
   fallback_model_refs: "",
@@ -26,15 +27,15 @@ const defaultSettings = {
   model_catalog: [
     {
       alias: "local-fast",
-      ref: "ollama/llama3.2",
+      ref: "",
       capability: "chat",
-      description: "Fast local default"
+      description: "Set this after choosing a provider"
     },
     {
       alias: "local-vision",
-      ref: "ollama/llava:7b",
+      ref: "",
       capability: "image",
-      description: "Local image-capable default"
+      description: "Optional image-capable route"
     }
   ],
   auth_profiles: [],
@@ -143,6 +144,17 @@ export default function App() {
               />
             }
             path="/models"
+          />
+          <Route
+            element={
+              <Terminal
+                currentJobId={jobs[0]?.id}
+                onSettingsChange={setSettings}
+                providerCatalog={providerCatalog}
+                settings={settings}
+              />
+            }
+            path="/terminal"
           />
           <Route element={<Upload settings={settings} />} path="/upload" />
           <Route element={<Processing />} path="/processing/:jobId" />

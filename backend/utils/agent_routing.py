@@ -16,6 +16,21 @@ DEFAULT_PROVIDER_URLS = {
     "openrouter": "https://openrouter.ai/api/v1",
 }
 
+LEGACY_DEFAULT_CONFIG = {
+    "provider": "ollama",
+    "auth_mode": "local",
+    "base_url": "http://127.0.0.1:11434",
+    "primary_model_ref": "ollama/llama3.2",
+    "image_model_ref": "ollama/llava:7b",
+    "fallback_model_refs": "",
+    "model_allowlist": "",
+    "model_catalog": [],
+    "auth_profiles": [],
+    "auth_order": {},
+    "browser_session_hint": "",
+    "api_key": "",
+}
+
 
 @dataclass(frozen=True)
 class ModelRoute:
@@ -120,25 +135,12 @@ def _normalize_auth_profiles(
                 }
             )
 
-    if not profiles:
-        profiles.append(
-            {
-                "id": f"default-{provider}",
-                "label": "default",
-                "provider": provider,
-                "auth_mode": (fallback_auth_mode or "local").replace("oauth", "browser_login"),
-                "base_url": fallback_base_url or provider_urls.get(provider, ""),
-                "api_key": fallback_api_key,
-                "browser_session_hint": fallback_browser_session_hint,
-                "enabled": True,
-            }
-        )
     return profiles
 
 
 def normalize_agent_settings(settings: dict[str, Any] | None) -> dict[str, Any]:
     payload = dict(settings or {})
-    provider = str(payload.get("provider") or "ollama").strip()
+    provider = str(payload.get("provider") or "").strip()
     provider_urls = payload.get("provider_urls") or {}
     if not isinstance(provider_urls, dict):
         provider_urls = {}
@@ -149,14 +151,16 @@ def normalize_agent_settings(settings: dict[str, Any] | None) -> dict[str, Any]:
     alias_map = _catalog_alias_map(catalog)
 
     primary_ref = _resolve_catalog_ref(str(payload.get("primary_model_ref") or payload.get("model") or "").strip(), alias_map)
-    primary_route = parse_model_ref(primary_ref, default_provider=provider) or ModelRoute(provider=provider, model="")
+    primary_route = parse_model_ref(primary_ref, default_provider=provider)
+    if primary_route and not provider:
+        provider = primary_route.provider
 
     image_ref = _resolve_catalog_ref(str(payload.get("image_model_ref") or "").strip(), alias_map)
-    image_route = parse_model_ref(image_ref, default_provider=primary_route.provider)
+    image_route = parse_model_ref(image_ref, default_provider=provider)
 
     fallback_routes = parse_fallback_refs(
         [_resolve_catalog_ref(item, alias_map) for item in (payload.get("fallback_model_refs") if isinstance(payload.get("fallback_model_refs"), list) else str(payload.get("fallback_model_refs") or payload.get("fallback_models") or "").split(",")) if str(item).strip()],
-        default_provider=primary_route.provider,
+        default_provider=provider,
     )
 
     allowlist = []
@@ -166,7 +170,7 @@ def normalize_agent_settings(settings: dict[str, Any] | None) -> dict[str, Any]:
     else:
         allowlist = [_resolve_catalog_ref(part.strip(), alias_map) for part in str(raw_allowlist).split(",") if part.strip()]
 
-    base_url = str(payload.get("base_url") or provider_urls.get(primary_route.provider) or "").strip()
+    base_url = str(payload.get("base_url") or provider_urls.get(provider) or "").strip()
     auth_mode = str(payload.get("auth_mode") or "local").strip().replace("oauth", "browser_login")
     api_key = str(payload.get("api_key") or "").strip()
     browser_session_hint = str(payload.get("browser_session_hint") or "").strip()
@@ -178,16 +182,16 @@ def normalize_agent_settings(settings: dict[str, Any] | None) -> dict[str, Any]:
         fallback_auth_mode=auth_mode,
         fallback_base_url=base_url,
         fallback_browser_session_hint=browser_session_hint,
-        provider=primary_route.provider,
+        provider=provider,
     )
 
     raw_auth_order = payload.get("auth_order") or {}
     auth_order = raw_auth_order if isinstance(raw_auth_order, dict) else {}
 
     return {
-        "provider": primary_route.provider,
-        "model": primary_route.model,
-        "primary_model_ref": primary_route.ref,
+        "provider": provider,
+        "model": primary_route.model if primary_route else "",
+        "primary_model_ref": primary_route.ref if primary_route else "",
         "image_model_ref": image_route.ref if image_route else "",
         "fallback_model_refs": [route.ref for route in fallback_routes],
         "model_allowlist": allowlist,
@@ -204,6 +208,8 @@ def normalize_agent_settings(settings: dict[str, Any] | None) -> dict[str, Any]:
 
 def auth_profile_chain(settings: dict[str, Any] | None, provider: str) -> list[dict[str, Any]]:
     normalized = normalize_agent_settings(settings)
+    if not provider:
+        return []
     profiles = [profile for profile in normalized["auth_profiles"] if profile["provider"] == provider and profile["enabled"]]
     preferred_ids = normalized["auth_order"].get(provider, []) if isinstance(normalized.get("auth_order"), dict) else []
     if preferred_ids:
@@ -227,6 +233,10 @@ def auth_profile_chain(settings: dict[str, Any] | None, provider: str) -> list[d
 
 def model_chain(settings: dict[str, Any] | None, capability: str = "chat") -> list[dict[str, str]]:
     normalized = normalize_agent_settings(settings)
+    if not normalized["primary_model_ref"] and capability == "chat":
+        return []
+    if capability == "image" and not normalized["image_model_ref"]:
+        return []
     alias_map = _catalog_alias_map(normalized["model_catalog"])
     primary_ref = normalized["image_model_ref"] if capability == "image" and normalized["image_model_ref"] else normalized["primary_model_ref"]
     chain = [parse_model_ref(_resolve_catalog_ref(primary_ref, alias_map), default_provider=normalized["provider"])]

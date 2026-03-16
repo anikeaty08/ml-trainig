@@ -85,7 +85,7 @@ export default function AgentConsole({ currentJobId, settings, onSettingsChange,
   });
 
   const provider = useMemo(
-    () => providerCatalog.find((item) => item.id === settings.provider) || providerCatalog[0],
+    () => providerCatalog.find((item) => item.id === settings.provider) || null,
     [providerCatalog, settings.provider]
   );
   const suggestedModels = provider?.suggested_models || [];
@@ -282,7 +282,11 @@ export default function AgentConsole({ currentJobId, settings, onSettingsChange,
       <div className="console-header">
         <div>
           <p className="eyebrow">OpenClaw-style agent selector</p>
-          <h3>Terminal + model routing</h3>
+          <h3>Terminal + chat-model routing</h3>
+          <p className="subtle-copy">
+            This terminal configures the agent that answers questions and runs commands. The ML training models remain
+            automatic.
+          </p>
         </div>
         <button className="button secondary" onClick={refreshModels} type="button">
           {loading ? "Checking..." : "Fetch models"}
@@ -291,9 +295,9 @@ export default function AgentConsole({ currentJobId, settings, onSettingsChange,
 
       <div className="selector-grid">
         <label>
-          Provider
+          Chat provider
           <select
-            value={settings.provider}
+            value={settings.provider || ""}
             onChange={(event) =>
               updateSettings(
                 {
@@ -306,6 +310,7 @@ export default function AgentConsole({ currentJobId, settings, onSettingsChange,
               )
             }
           >
+            <option value="">Choose a provider</option>
             {providerCatalog.map((item) => (
               <option key={item.id} value={item.id}>
                 {item.id}
@@ -336,7 +341,7 @@ export default function AgentConsole({ currentJobId, settings, onSettingsChange,
           />
         </label>
         <label>
-          Primary model ref
+          Main chat model ref
           <input
             value={settings.primary_model_ref || ""}
             onChange={(event) => onSettingsChange(applyPrimaryModelRef(settings, event.target.value))}
@@ -351,7 +356,7 @@ export default function AgentConsole({ currentJobId, settings, onSettingsChange,
           </datalist>
         </label>
         <label>
-          Image model ref
+          Optional image model ref
           <input
             value={settings.image_model_ref || ""}
             onChange={(event) => onSettingsChange({ ...settings, image_model_ref: event.target.value })}
@@ -360,7 +365,7 @@ export default function AgentConsole({ currentJobId, settings, onSettingsChange,
           />
         </label>
         <label>
-          Fallback model refs
+          Fallback chat model refs
           <input
             value={settings.fallback_model_refs || settings.fallback_models || ""}
             onChange={(event) =>
@@ -396,11 +401,10 @@ export default function AgentConsole({ currentJobId, settings, onSettingsChange,
       <section className="provider-panel">
         <div>
           <p className="eyebrow">Selected provider</p>
-          <h4>{provider?.label || settings.provider}</h4>
-          <p>{provider?.onboarding_hint || "Configure a local or hosted provider for chat assistance."}</p>
+          <h4>{provider?.label || "No provider selected yet"}</h4>
+          <p>{provider?.onboarding_hint || "Choose a provider first, then set the main chat model ref."}</p>
           <p>
-            Capabilities: {(provider?.capabilities || []).join(", ") || "chat"} | Auth modes:{" "}
-            {(provider?.auth_modes || []).join(", ") || "local"}
+            Capabilities: {(provider?.capabilities || []).join(", ") || "chat"} | Auth modes: {(provider?.auth_modes || []).join(", ") || "local"}
           </p>
         </div>
         <div className="chip-row">
@@ -413,7 +417,13 @@ export default function AgentConsole({ currentJobId, settings, onSettingsChange,
       </section>
 
       <div className="quick-actions">
-        {["/onboard", "/model status", "/model scan", "/jobs", "/dataset summary"].map((value) => (
+        {[
+          provider?.id ? `/onboard ${provider.id}` : "/onboard",
+          "/model status",
+          "/model scan",
+          "/jobs",
+          "/dataset summary"
+        ].map((value) => (
           <button
             className="button secondary slim-button"
             key={value}

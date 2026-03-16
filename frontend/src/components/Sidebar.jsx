@@ -2,9 +2,10 @@ import { NavLink } from "react-router-dom";
 
 const links = [
   { to: "/setup", label: "Setup Wizard" },
+  { to: "/terminal", label: "Chat Terminal" },
   { to: "/downloads", label: "Downloads" },
   { to: "/", label: "Dashboard" },
-  { to: "/models", label: "Model Selector" },
+  { to: "/models", label: "Agent Config" },
   { to: "/upload", label: "Upload Dataset" }
 ];
 

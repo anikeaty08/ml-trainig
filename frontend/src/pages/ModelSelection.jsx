@@ -5,12 +5,11 @@ export default function ModelSelection({ settings, onSettingsChange, providerCat
     <div className="stack">
       <section className="card">
         <p className="eyebrow">Provider-first routing</p>
-        <h2>Agent model selection</h2>
+        <h2>Agent model configuration</h2>
         <p>
-          This is the agent configuration surface, not the training-model picker. The ML pipeline runs the relevant
-          training families automatically; this panel only configures how the chat agent talks to providers like Ollama,
-          OpenAI, Claude, Gemini, or Kimi. Settings are stored on the device through the local backend database rather
-          than browser localStorage.
+          This page is only for the chat agent. It tells the terminal which provider and `provider/model` ref to use
+          when you ask questions or run agent commands. It does not choose the ML training models. Training-model
+          selection stays automatic for every dataset.
         </p>
       </section>
 
