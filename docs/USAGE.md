@@ -9,6 +9,12 @@
 ## Agent console
 
 - Provider-first routing
-- Primary model plus fallback list
+- Primary `provider/model` plus fallback chain
 - Settings persisted in browser localStorage
 - Supports local endpoints like Ollama and LM Studio first
+
+## Dataset modes
+
+- Tabular: mixed numeric/categorical CSVs for classification or regression
+- Text: CSVs with a strong text column plus a target label/value
+- Time series: CSVs with a datetime column plus a numeric target

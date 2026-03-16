@@ -1,13 +1,14 @@
 # ML Pipeline Agent
 
-Local-first autonomous ML pipeline for messy tabular datasets. Download it, run one install command, upload a CSV, and the app cleans the data, trains multiple models, compares them, and gives you downloadable artifacts plus a terminal-style agent console for provider/model selection.
+Local-first autonomous ML pipeline for messy datasets. Download it, run one install command, upload a CSV, and the app detects whether the job is tabular, text-heavy, or time-series, then cleans the data, trains multiple models, compares them, and gives you downloadable artifacts plus a terminal-style agent console for provider/model selection.
 
 ## What is included
 
 - FastAPI backend with local job queue, SQLite tracking, WebSocket progress, and artifact downloads
 - React frontend with direct upload flow, job history, model comparison, and agent console
 - Autonomous CSV cleaning, target inference, dataset fitness analysis, and multi-model training
-- OpenClaw-style provider-first LLM selection with `provider/model` identifiers and optional fallbacks
+- Broader autonomous modes for tabular datasets, text-in-CSV workflows, and time-series forecasting from timestamped CSVs
+- OpenClaw-style provider-first LLM selection with `provider/model` identifiers and optional fallback chains
 - One-command setup scripts for macOS, Linux, and Windows
 
 ## Quick start
@@ -43,11 +44,11 @@ The installer:
 
 ## Current MVP scope
 
-- Fully implemented: tabular CSV/TSV datasets
+- Fully implemented: tabular CSV/TSV datasets, text-in-CSV datasets, and timestamped CSV forecasting datasets
 - Included models: logistic regression, random forest, extra trees, gradient boosting, histogram gradient boosting, SVM, KNN, naive Bayes, ridge/linear regression, and voting ensemble
 - Real-time job progress over WebSocket
 - Downloadable model, cleaned dataset, generated training code, HTML report, predictions, and comparison CSV
-- Optional local/cloud-style provider settings for the agent console
+- Optional local/cloud-style provider settings for the agent console, including primary plus fallback model refs
 
 ## Notes
 

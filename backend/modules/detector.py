@@ -25,7 +25,7 @@ def _datetime_candidates(df: pd.DataFrame) -> list[str]:
         sample = series.dropna().astype(str).head(250)
         if sample.empty:
             continue
-        parsed = pd.to_datetime(sample, errors="coerce", utc=False)
+        parsed = pd.to_datetime(sample, errors="coerce", utc=False, format="mixed")
         success_ratio = parsed.notna().mean()
         if success_ratio >= 0.8 or any(token in column.lower() for token in ("date", "time", "timestamp")):
             candidates.append(column)
@@ -59,17 +59,22 @@ def _looks_like_identifier(series: pd.Series, name: str) -> bool:
 
 
 def infer_target_column(df: pd.DataFrame) -> str | None:
+    columns = list(df.columns)
     preferred = [
         column
-        for column in df.columns
+        for column in columns
         if column.lower() in LIKELY_TARGET_NAMES and not _looks_like_identifier(df[column], column)
     ]
     if preferred:
         return preferred[0]
 
-    candidates = [column for column in df.columns if not _looks_like_identifier(df[column], column)]
+    candidates = [
+        column
+        for index, column in enumerate(columns)
+        if index == len(columns) - 1 or not _looks_like_identifier(df[column], column)
+    ]
     if not candidates:
-        return None
+        return columns[-1] if columns else None
 
     for column in reversed(candidates):
         unique_count = df[column].nunique(dropna=True)
