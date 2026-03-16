@@ -10,6 +10,8 @@
 
 - Provider-first routing
 - Primary `provider/model` plus fallback chain
+- Separate image-model route and optional allowlist
+- Local auth profiles per provider with ordered rotation
 - Settings persisted in browser localStorage
 - Supports local endpoints like Ollama and LM Studio first
 

@@ -27,6 +27,11 @@ export const api = {
   getJob: (jobId) => request(`/api/jobs/${jobId}`),
   getJobResults: (jobId) => request(`/api/jobs/${jobId}/results`),
   getProviders: () => request("/api/agent/providers"),
+  getAgentPolicy: (settings) =>
+    request("/api/agent/policy", {
+      method: "POST",
+      body: JSON.stringify(settings)
+    }),
   getRemoteModels: (settings) =>
     request("/api/agent/models", {
       method: "POST",

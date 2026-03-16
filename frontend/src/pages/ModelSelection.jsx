@@ -7,9 +7,9 @@ export default function ModelSelection({ settings, onSettingsChange, providerCat
         <p className="eyebrow">Provider-first routing</p>
         <h2>Agent model selection</h2>
         <p>
-          This follows the OpenClaw-style pattern: choose a provider first, then a primary model, then optional
-          fallback models. Settings are saved in browser localStorage on this machine and passed to the backend only
-          when needed for commands or runs.
+          This follows the OpenClaw-style pattern more closely now: primary model, image model, fallback chain,
+          allowlist, and provider auth profiles. Settings are saved in browser localStorage on this machine and passed
+          to the backend only when needed for commands or runs.
         </p>
       </section>
 

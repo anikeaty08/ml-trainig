@@ -8,7 +8,7 @@ Local-first autonomous ML pipeline for messy datasets. Download it, run one inst
 - React frontend with direct upload flow, job history, model comparison, and agent console
 - Autonomous CSV cleaning, target inference, dataset fitness analysis, and multi-model training
 - Broader autonomous modes for tabular datasets, text-in-CSV workflows, and time-series forecasting from timestamped CSVs
-- OpenClaw-style provider-first LLM selection with `provider/model` identifiers and optional fallback chains
+- OpenClaw-style provider-first LLM selection with `provider/model` identifiers, image-model routing, optional fallback chains, allowlists, and local auth profiles
 - One-command setup scripts for macOS, Linux, and Windows
 
 ## Quick start
@@ -65,6 +65,7 @@ Double-click `start.bat` or run:
 - Real-time job progress over WebSocket
 - Downloadable model, cleaned dataset, generated training code, HTML report, predictions, and comparison CSV
 - Optional local/cloud-style provider settings for the agent console, including primary plus fallback model refs
+- Console commands like `/model status`, `/model set`, `/model image`, and `/model fallback add`
 
 ## Notes
 

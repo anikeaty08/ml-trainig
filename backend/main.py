@@ -14,12 +14,12 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import database
-from .config import BUILTIN_MODELS_DIR, FRONTEND_BUILD_DIR, SUPPORTED_FILE_EXTENSIONS, ensure_directories
+from .config import APP_PORT, BUILTIN_MODELS_DIR, FRONTEND_BUILD_DIR, SUPPORTED_FILE_EXTENSIONS, ensure_directories
 from .jobs.queue import JobQueue
 from .jobs.state import JobStateManager
 from .modules.recommender import provider_catalog
 from .orchestrator import Orchestrator
-from .utils.agent_routing import model_chain, normalize_agent_settings
+from .utils.agent_routing import auth_profile_chain, model_chain, normalize_agent_settings, resolve_agent_policy
 from .utils.helpers import read_json_file
 from .utils.storage import create_bundle_archive, save_upload
 from .utils.validators import validate_upload
@@ -207,28 +207,61 @@ def download_bundle(job_id: str) -> FileResponse:
 
 @app.get("/api/agent/providers")
 def get_agent_providers() -> dict[str, Any]:
-    return {"providers": provider_catalog(), "routing_style": "openclaw-like provider/model refs with fallback chain"}
+    return {
+        "providers": provider_catalog(),
+        "routing_style": "openclaw-like provider/model refs with fallback chain and provider auth rotation",
+        "commands": [
+            "/model",
+            "/model list",
+            "/model status",
+            "/model set <provider/model>",
+            "/model image <provider/model>",
+            "/model fallback add <provider/model>",
+            "/model fallback remove <provider/model>",
+        ],
+    }
+
+
+@app.get("/api/agent/config")
+def get_agent_config() -> dict[str, Any]:
+    return resolve_agent_policy(database.get_agent_config())
+
+
+@app.put("/api/agent/config")
+def save_agent_config(payload: dict[str, Any]) -> dict[str, Any]:
+    normalized = resolve_agent_policy(payload)
+    database.save_agent_config(normalized)
+    return normalized
+
+
+@app.post("/api/agent/policy")
+def get_agent_policy(payload: dict[str, Any]) -> dict[str, Any]:
+    return resolve_agent_policy(payload)
 
 
 async def _list_remote_models(settings: dict[str, Any]) -> list[str]:
-    normalized = normalize_agent_settings(settings)
+    normalized = resolve_agent_policy(settings)
     provider = normalized.get("provider", "")
-    base_url = normalized.get("base_url", "")
-    api_key = normalized.get("api_key", "")
-    headers: dict[str, str] = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+    profiles = auth_profile_chain(normalized, provider)
 
     async with httpx.AsyncClient(timeout=10.0) as client:
-        if provider == "ollama":
-            response = await client.get(f"{base_url.rstrip('/')}/api/tags")
-            response.raise_for_status()
-            return [item["name"] for item in response.json().get("models", [])]
+        for profile in profiles:
+            base_url = profile.get("base_url", "")
+            headers: dict[str, str] = {"Authorization": f"Bearer {profile['api_key']}"} if profile.get("api_key") else {}
+            try:
+                if provider == "ollama":
+                    response = await client.get(f"{base_url.rstrip('/')}/api/tags")
+                    response.raise_for_status()
+                    return [item["name"] for item in response.json().get("models", [])]
 
-        if provider in {"lmstudio", "openai_compatible", "openai"}:
-            url = f"{base_url.rstrip('/')}/models" if not base_url.endswith("/v1") else f"{base_url}/models"
-            response = await client.get(url, headers=headers)
-            response.raise_for_status()
-            payload = response.json()
-            return [item["id"] for item in payload.get("data", [])]
+                if provider in {"lmstudio", "openai_compatible", "openai"}:
+                    url = f"{base_url.rstrip('/')}/models" if not base_url.endswith("/v1") else f"{base_url}/models"
+                    response = await client.get(url, headers=headers)
+                    response.raise_for_status()
+                    payload = response.json()
+                    return [item["id"] for item in payload.get("data", [])]
+            except Exception:
+                continue
 
     return []
 
@@ -236,7 +269,7 @@ async def _list_remote_models(settings: dict[str, Any]) -> list[str]:
 @app.post("/api/agent/models")
 async def get_agent_models(payload: dict[str, Any]) -> dict[str, Any]:
     try:
-        normalized = normalize_agent_settings(payload)
+        normalized = resolve_agent_policy(payload)
         models = await _list_remote_models(normalized)
     except Exception as exc:
         return {"models": [], "error": str(exc)}
@@ -282,62 +315,63 @@ def _rule_based_console_response(command: str, job_id: str | None) -> str:
 
 
 async def _dispatch_provider_command(command: str, settings: dict[str, Any]) -> str:
-    normalized = normalize_agent_settings(settings)
-    auth_mode = normalized.get("auth_mode", "local")
-    if auth_mode == "browser_login":
-        return "Browser-login mode is represented in the selector, but execution currently uses local or API-key-backed routes."
+    normalized = resolve_agent_policy(settings)
 
     async with httpx.AsyncClient(timeout=30.0) as client:
-        for route in model_chain(normalized):
+        for route in model_chain(normalized, capability="chat"):
             provider = route["provider"]
             model = route["model"]
             if not model:
                 continue
-            base_url = route["base_url"]
-            headers: dict[str, str] = {"Authorization": f"Bearer {normalized['api_key']}"} if normalized.get("api_key") else {}
-            try:
-                if provider == "ollama":
-                    response = await client.post(
-                        f"{base_url.rstrip('/')}/api/chat",
-                        json={
-                            "model": model,
-                            "messages": [{"role": "user", "content": command}],
-                            "stream": False,
-                        },
-                    )
-                    response.raise_for_status()
-                    payload = response.json()
-                    content = payload.get("message", {}).get("content", "")
-                    if content:
-                        return f"[{route['ref']}]\n{content}"
-
-                if provider in {"lmstudio", "openai_compatible", "openai"}:
-                    url = f"{base_url.rstrip('/')}/chat/completions" if not base_url.endswith("/v1") else f"{base_url}/chat/completions"
-                    response = await client.post(
-                        url,
-                        headers=headers,
-                        json={
-                            "model": model,
-                            "messages": [{"role": "user", "content": command}],
-                            "temperature": 0.2,
-                        },
-                    )
-                    response.raise_for_status()
-                    payload = response.json()
-                    choices = payload.get("choices", [])
-                    if choices:
-                        content = choices[0].get("message", {}).get("content", "")
+            profiles = auth_profile_chain(normalized, provider)
+            for profile in profiles:
+                if profile.get("auth_mode") == "browser_login":
+                    continue
+                base_url = profile.get("base_url") or route["base_url"]
+                headers: dict[str, str] = {"Authorization": f"Bearer {profile['api_key']}"} if profile.get("api_key") else {}
+                try:
+                    if provider == "ollama":
+                        response = await client.post(
+                            f"{base_url.rstrip('/')}/api/chat",
+                            json={
+                                "model": model,
+                                "messages": [{"role": "user", "content": command}],
+                                "stream": False,
+                            },
+                        )
+                        response.raise_for_status()
+                        payload = response.json()
+                        content = payload.get("message", {}).get("content", "")
                         if content:
-                            return f"[{route['ref']}]\n{content}"
-            except Exception:
-                continue
+                            return f"[{route['ref']} via {profile['label']}]\n{content}"
+
+                    if provider in {"lmstudio", "openai_compatible", "openai"}:
+                        url = f"{base_url.rstrip('/')}/chat/completions" if not base_url.endswith("/v1") else f"{base_url}/chat/completions"
+                        response = await client.post(
+                            url,
+                            headers=headers,
+                            json={
+                                "model": model,
+                                "messages": [{"role": "user", "content": command}],
+                                "temperature": 0.2,
+                            },
+                        )
+                        response.raise_for_status()
+                        payload = response.json()
+                        choices = payload.get("choices", [])
+                        if choices:
+                            content = choices[0].get("message", {}).get("content", "")
+                            if content:
+                                return f"[{route['ref']} via {profile['label']}]\n{content}"
+                except Exception:
+                    continue
     return ""
 
 
 @app.post("/api/agent/command")
 async def run_agent_command(payload: dict[str, Any]) -> dict[str, str]:
     command = str(payload.get("command", "")).strip()
-    settings = payload.get("settings", {})
+    settings = payload.get("settings") or database.get_agent_config()
     job_id = payload.get("job_id")
     if not command:
         raise HTTPException(status_code=400, detail="Command is required")
@@ -349,6 +383,11 @@ async def run_agent_command(payload: dict[str, Any]) -> dict[str, str]:
     except Exception:
         pass
     return {"response": _rule_based_console_response(command, job_id)}
+
+
+@app.get("/api/meta/runtime")
+def runtime_meta() -> dict[str, Any]:
+    return {"app_port": APP_PORT, "app_origin": f"http://127.0.0.1:{APP_PORT}"}
 
 
 if FRONTEND_BUILD_DIR.exists():

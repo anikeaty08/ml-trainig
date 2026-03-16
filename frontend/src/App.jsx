@@ -17,10 +17,28 @@ const defaultSettings = {
   provider: "ollama",
   auth_mode: "local",
   base_url: "http://127.0.0.1:11434",
-  primary_model_ref: "",
+  primary_model_ref: "ollama/llama3.2",
+  image_model_ref: "ollama/llava:7b",
   model: "",
   fallback_models: "",
   fallback_model_refs: "",
+  model_allowlist: "",
+  model_catalog: [
+    {
+      alias: "local-fast",
+      ref: "ollama/llama3.2",
+      capability: "chat",
+      description: "Fast local default"
+    },
+    {
+      alias: "local-vision",
+      ref: "ollama/llava:7b",
+      capability: "image",
+      description: "Local image-capable default"
+    }
+  ],
+  auth_profiles: [],
+  auth_order: {},
   browser_session_hint: "",
   api_key: ""
 };

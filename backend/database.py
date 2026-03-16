@@ -90,6 +90,12 @@ def init_database() -> None:
                     browser_session_hint TEXT,
                     updated_at TEXT NOT NULL
                 );
+
+                CREATE TABLE IF NOT EXISTS agent_config (
+                    id INTEGER PRIMARY KEY CHECK (id = 1),
+                    config_json TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
                 """
             )
             connection.execute(
@@ -99,6 +105,32 @@ def init_database() -> None:
                 VALUES (1, 'ollama', '', 'http://127.0.0.1:11434', 'local', '', '', ?)
                 """,
                 (utc_now(),),
+            )
+            connection.execute(
+                """
+                INSERT OR IGNORE INTO agent_config
+                (id, config_json, updated_at)
+                VALUES (1, ?, ?)
+                """,
+                (
+                    json.dumps(
+                        {
+                            "provider": "ollama",
+                            "auth_mode": "local",
+                            "base_url": "http://127.0.0.1:11434",
+                            "primary_model_ref": "ollama/llama3.2",
+                            "image_model_ref": "ollama/llava:7b",
+                            "fallback_model_refs": "",
+                            "model_allowlist": "",
+                            "model_catalog": [],
+                            "auth_profiles": [],
+                            "auth_order": {},
+                            "browser_session_hint": "",
+                            "api_key": "",
+                        }
+                    ),
+                    utc_now(),
+                ),
             )
 
 
@@ -246,4 +278,22 @@ def save_agent_settings(
         WHERE id = 1
         """,
         (provider, model, base_url, auth_mode, api_key, browser_session_hint, utc_now()),
+    )
+
+
+def get_agent_config() -> dict[str, Any]:
+    row = fetch_one("SELECT config_json, updated_at FROM agent_config WHERE id = 1")
+    if not row:
+        init_database()
+        row = fetch_one("SELECT config_json, updated_at FROM agent_config WHERE id = 1")
+    assert row is not None
+    payload = json.loads(row["config_json"])
+    payload["updated_at"] = row["updated_at"]
+    return payload
+
+
+def save_agent_config(config: dict[str, Any]) -> None:
+    execute(
+        "UPDATE agent_config SET config_json = ?, updated_at = ? WHERE id = 1",
+        (config, utc_now()),
     )

@@ -254,6 +254,32 @@ select {
   word-break: break-word;
 }
 
+.profile-panel {
+  margin-bottom: 1rem;
+  padding: 1rem;
+  border-radius: 22px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.profile-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.profile-list {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.slim-button {
+  padding: 0.55rem 0.9rem;
+  justify-self: start;
+}
+
 .terminal-output {
   min-height: 120px;
   white-space: pre-wrap;
