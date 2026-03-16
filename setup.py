@@ -7,6 +7,11 @@ setup(
     description="Local-first autonomous ML pipeline agent",
     packages=find_packages(),
     include_package_data=True,
+    entry_points={
+        "console_scripts": [
+            "ml-pipeline-agent=backend.cli:main",
+        ]
+    },
     install_requires=[
         "fastapi>=0.115,<1.0",
         "uvicorn[standard]>=0.30,<1.0",
