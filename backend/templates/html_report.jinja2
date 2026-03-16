@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>ML Pipeline Report - {{ job_id }}</title>
+    <style>
+      body {
+        font-family: "Segoe UI", sans-serif;
+        margin: 2rem auto;
+        max-width: 980px;
+        color: #1a202c;
+        background: linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%);
+      }
+      .card {
+        background: white;
+        border-radius: 18px;
+        padding: 1.5rem;
+        margin-bottom: 1rem;
+        box-shadow: 0 10px 35px rgba(15, 23, 42, 0.08);
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      th, td {
+        padding: 0.6rem;
+        border-bottom: 1px solid #e2e8f0;
+        text-align: left;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>ML Pipeline Report</h1>
+      <p><strong>Job:</strong> {{ job_id }}</p>
+      <p><strong>Task:</strong> {{ task_type }}</p>
+      <p><strong>Target:</strong> {{ target_column }}</p>
+      <p><strong>Winning model:</strong> {{ best_model_name }}</p>
+    </div>
+    <div class="card">
+      <h2>Test Metrics</h2>
+      <table>
+        {% for key, value in test_metrics.items() %}
+        <tr><th>{{ key }}</th><td>{{ value }}</td></tr>
+        {% endfor %}
+      </table>
+    </div>
+    <div class="card">
+      <h2>Parameters</h2>
+      <pre>{{ params }}</pre>
+    </div>
+    <div class="card">
+      <h2>Feature Importance</h2>
+      <table>
+        <tr><th>Feature</th><th>Importance</th></tr>
+        {% for row in feature_importance %}
+        <tr><td>{{ row.feature }}</td><td>{{ row.importance }}</td></tr>
+        {% endfor %}
+      </table>
+    </div>
+  </body>
+</html>

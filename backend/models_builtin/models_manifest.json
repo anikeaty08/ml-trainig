@@ -1,0 +1,19 @@
+{
+  "models": [
+    {
+      "name": "fast-classifier",
+      "label": "Fast Classifier",
+      "path": ""
+    },
+    {
+      "name": "accurate-classifier",
+      "label": "Accurate Classifier",
+      "path": ""
+    },
+    {
+      "name": "balanced-classifier",
+      "label": "Balanced Classifier",
+      "path": ""
+    }
+  ]
+}

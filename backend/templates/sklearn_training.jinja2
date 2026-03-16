@@ -1,0 +1,44 @@
+import pandas as pd
+from sklearn.compose import ColumnTransformer
+from sklearn.impute import SimpleImputer
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
+
+BEST_MODEL_NAME = "{{ best_model_name }}"
+BEST_PARAMS = {{ best_params }}
+TARGET_COLUMN = "{{ target_column }}"
+TASK_TYPE = "{{ task_type }}"
+
+dataset = pd.read_csv("cleaned_dataset.csv")
+X = dataset.drop(columns=[TARGET_COLUMN])
+y = dataset[TARGET_COLUMN]
+
+numeric_features = X.select_dtypes(include=["number"]).columns.tolist()
+categorical_features = [column for column in X.columns if column not in numeric_features]
+
+preprocessor = ColumnTransformer(
+    transformers=[
+        (
+            "num",
+            Pipeline(
+                steps=[
+                    ("imputer", SimpleImputer(strategy="median")),
+                    ("scaler", StandardScaler()),
+                ]
+            ),
+            numeric_features,
+        ),
+        (
+            "cat",
+            Pipeline(
+                steps=[
+                    ("imputer", SimpleImputer(strategy="most_frequent")),
+                    ("onehot", OneHotEncoder(handle_unknown="ignore")),
+                ]
+            ),
+            categorical_features,
+        ),
+    ]
+)
+
+print("Reproduce the pipeline by instantiating", BEST_MODEL_NAME, "with", BEST_PARAMS)

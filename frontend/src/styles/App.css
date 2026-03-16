@@ -1,0 +1,344 @@
+:root {
+  --bg: #f6efe5;
+  --bg-strong: #ead9c4;
+  --panel: rgba(255, 255, 255, 0.82);
+  --ink: #1e1f24;
+  --muted: #5b5c63;
+  --accent: #0c7c59;
+  --accent-soft: #d8f0e7;
+  --line: rgba(30, 31, 36, 0.1);
+  --shadow: 0 20px 40px rgba(34, 26, 15, 0.08);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Trebuchet MS", "Segoe UI Variable", sans-serif;
+  color: var(--ink);
+  background:
+    radial-gradient(circle at top right, rgba(12, 124, 89, 0.12), transparent 26%),
+    radial-gradient(circle at bottom left, rgba(177, 98, 37, 0.12), transparent 24%),
+    var(--bg);
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+.app-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 260px 1fr;
+}
+
+.sidebar {
+  padding: 1.5rem;
+  border-right: 1px solid var(--line);
+  background: rgba(245, 237, 226, 0.94);
+  position: sticky;
+  top: 0;
+  height: 100vh;
+}
+
+.sidebar-brand {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.sidebar-brand p,
+.eyebrow {
+  margin: 0;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.72rem;
+}
+
+.brand-badge {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #134e4a, #0c7c59);
+  color: white;
+  font-weight: 700;
+}
+
+.nav-link {
+  display: block;
+  padding: 0.9rem 1rem;
+  border-radius: 14px;
+  margin-bottom: 0.5rem;
+  color: var(--muted);
+  transition: transform 150ms ease, background 150ms ease;
+}
+
+.nav-link:hover,
+.nav-link.active {
+  background: white;
+  color: var(--ink);
+  transform: translateX(4px);
+}
+
+.main-panel {
+  padding: 1.5rem;
+}
+
+.app-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.app-header h1,
+.hero-card h2,
+.card h2,
+.card h3 {
+  margin: 0.2rem 0 0;
+}
+
+.header-stats {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.pill,
+.meta-card {
+  padding: 0.75rem 1rem;
+  border-radius: 999px;
+  background: white;
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  display: grid;
+  gap: 0.2rem;
+}
+
+.pill.accent {
+  background: var(--accent-soft);
+}
+
+.stack {
+  display: grid;
+  gap: 1rem;
+}
+
+.card {
+  background: var(--panel);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  border-radius: 28px;
+  padding: 1.5rem;
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(8px);
+}
+
+.hero-card,
+.split-card {
+  display: grid;
+  gap: 1rem;
+}
+
+.split-card {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.cta-row,
+.download-grid,
+.upload-meta {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.button {
+  border: none;
+  border-radius: 999px;
+  padding: 0.9rem 1.2rem;
+  background: var(--accent);
+  color: white;
+  cursor: pointer;
+}
+
+.button.secondary {
+  background: white;
+  color: var(--ink);
+  border: 1px solid var(--line);
+}
+
+.job-list,
+.preset-list {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.job-row,
+.preset-card {
+  padding: 1rem;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid var(--line);
+  display: grid;
+  gap: 0.25rem;
+}
+
+.console-card {
+  overflow: hidden;
+}
+
+.console-header,
+.selector-grid,
+.terminal-input,
+.progress-copy {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+}
+
+.selector-grid {
+  margin: 1rem 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.selector-grid label,
+.upload-zone {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.selector-grid input,
+.selector-grid select,
+.terminal-input input {
+  width: 100%;
+  padding: 0.8rem 0.9rem;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: white;
+}
+
+.terminal-shell {
+  background: #1d1f24;
+  color: #eef2f7;
+  border-radius: 24px;
+  padding: 1rem;
+  font-family: "Cascadia Mono", "Consolas", monospace;
+}
+
+.terminal-output {
+  min-height: 120px;
+  white-space: pre-wrap;
+  padding-bottom: 1rem;
+}
+
+.terminal-input {
+  align-items: stretch;
+}
+
+.terminal-input span {
+  display: grid;
+  place-items: center;
+  color: #82f0ca;
+}
+
+.upload-card {
+  display: grid;
+  gap: 1rem;
+}
+
+.upload-zone {
+  padding: 2.5rem;
+  border-radius: 24px;
+  border: 2px dashed rgba(12, 124, 89, 0.25);
+  background: rgba(255, 255, 255, 0.76);
+  text-align: center;
+}
+
+.upload-zone input {
+  display: none;
+}
+
+.progress-shell {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.progress-track {
+  height: 16px;
+  background: rgba(30, 31, 36, 0.08);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #0c7c59, #ff9f1c);
+}
+
+.comparison-table {
+  overflow: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  padding: 0.8rem 0.5rem;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+}
+
+pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: "Cascadia Mono", "Consolas", monospace;
+  font-size: 0.9rem;
+}
+
+.error-text {
+  color: #b42318;
+}
+
+@media (max-width: 960px) {
+  .app-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    height: auto;
+    position: static;
+    border-right: none;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .split-card,
+  .selector-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .app-header,
+  .console-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
