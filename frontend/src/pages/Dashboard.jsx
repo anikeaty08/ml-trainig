@@ -72,7 +72,7 @@ export default function Dashboard({ jobs, availableModels, settings, onJobsRefre
           <h3>Automatic training families</h3>
           <div className="preset-list">
             {(availableModels.candidate_families || []).map((item) => (
-              <article className="preset-card" key={item.name}>
+              <article className="preset-card" key={item}>
                 <strong>{item}</strong>
                 <p>The pipeline decides when to use this family and compares it against the rest.</p>
               </article>

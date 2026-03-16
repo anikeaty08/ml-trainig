@@ -317,11 +317,17 @@ def _learning_curves(task_type: str, model: Pipeline, X: pd.DataFrame, y: pd.Ser
 
 
 def _build_ensemble(task_type: str, preprocessor: ColumnTransformer, winners: list[dict[str, Any]]) -> Pipeline | None:
-    if len(winners) < 2:
+    eligible_winners = [
+        winner for winner in winners if winner.get("search") is not None and hasattr(winner.get("pipeline"), "named_steps")
+    ]
+    if len(eligible_winners) < 2:
         return None
     estimators = [
-        (winner["name"].lower().replace(" ", "_").replace("+", "").replace("-", "_"), clone(winner["search"].best_estimator_.named_steps["model"]))
-        for winner in winners[:3]
+        (
+            winner["name"].lower().replace(" ", "_").replace("+", "").replace("-", "_"),
+            clone(winner["search"].best_estimator_.named_steps["model"]),
+        )
+        for winner in eligible_winners[:3]
     ]
     model = VotingClassifier(estimators=estimators, voting="soft") if task_type == "classification" else VotingRegressor(estimators=estimators)
     return Pipeline([("preprocessor", clone(preprocessor)), ("model", model)])
@@ -454,20 +460,23 @@ def _package_results(
     ensemble_model = _build_ensemble(task_type, preprocessor, winners)
 
     if ensemble_model is not None:
+        ensemble_members = [
+            winner for winner in winners if winner.get("search") is not None and hasattr(winner.get("pipeline"), "named_steps")
+        ][:3]
         ensemble_model.fit(train_val_X, train_val_y)
         ensemble_metrics = _evaluate(task_type, ensemble_model, X_test, y_test)
         sorted_results.append(
             {
                 "name": "Voting Ensemble",
                 "family": "ensemble",
-                "search": winners[0]["search"],
+                "search": ensemble_members[0]["search"],
                 "pipeline": ensemble_model,
-                "cv_score_mean": round(np.mean([winner["cv_score_mean"] for winner in winners]), 4),
-                "cv_score_std": round(np.mean([winner["cv_score_std"] for winner in winners]), 4),
-                "validation_metrics": winners[0]["validation_metrics"],
+                "cv_score_mean": round(np.mean([winner["cv_score_mean"] for winner in ensemble_members]), 4),
+                "cv_score_std": round(np.mean([winner["cv_score_std"] for winner in ensemble_members]), 4),
+                "validation_metrics": ensemble_members[0]["validation_metrics"],
                 "test_metrics": ensemble_metrics,
-                "training_time_seconds": round(sum(winner["training_time_seconds"] for winner in winners), 3),
-                "params": {"members": [winner["name"] for winner in winners]},
+                "training_time_seconds": round(sum(winner["training_time_seconds"] for winner in ensemble_members), 3),
+                "params": {"members": [winner["name"] for winner in ensemble_members]},
                 "evaluation": {
                     "X_test": X_test.copy(),
                     "y_test": y_test.copy(),

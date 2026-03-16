@@ -22,8 +22,13 @@ def generate_training_artifacts(
     template_dir = Path(__file__).resolve().parent.parent / "templates"
     env = Environment(loader=FileSystemLoader(template_dir))
 
-    training_template = env.get_template("sklearn_training.jinja2")
     report_template = env.get_template("html_report.jinja2")
+    framework = str(best_model.get("params", {}).get("framework") or "sklearn")
+    training_template_name = {
+        "tensorflow": "tensorflow_training.jinja2",
+        "pytorch": "pytorch_training.jinja2",
+    }.get(framework, "sklearn_training.jinja2")
+    training_template = env.get_template(training_template_name)
 
     cleaned_dataset_path = save_csv(artifact_dirs["data"] / "cleaned_dataset.csv", cleaned_df)
     predictions_df = best_model["evaluation"]["X_test"].copy()
@@ -33,8 +38,21 @@ def generate_training_artifacts(
         predictions_df["probability"] = best_model["evaluation"]["probabilities"]
     predictions_path = save_csv(artifact_dirs["reports"] / "predictions.csv", predictions_df)
 
-    model_path = artifact_dirs["model"] / "best_model.joblib"
-    joblib.dump(best_model["pipeline"], model_path)
+    if framework == "tensorflow":
+        model_path = artifact_dirs["model"] / "best_model.keras"
+        best_model["pipeline"].model.save(model_path)
+    elif framework == "pytorch":
+        model_path = artifact_dirs["model"] / "best_model.pt"
+        torch_module = getattr(best_model["pipeline"], "torch_module", None)
+        if torch_module is not None:
+            torch_module.save(best_model["pipeline"].model.state_dict(), model_path)
+        else:
+            fallback_path = artifact_dirs["model"] / "best_model.joblib"
+            joblib.dump(best_model["pipeline"], fallback_path)
+            model_path = fallback_path
+    else:
+        model_path = artifact_dirs["model"] / "best_model.joblib"
+        joblib.dump(best_model["pipeline"], model_path)
 
     training_script = training_template.render(
         target_column=target_column,
@@ -56,7 +74,17 @@ def generate_training_artifacts(
     report_path = save_text(artifact_dirs["reports"] / "report.html", report_html)
 
     save_text(artifact_dirs["code"] / "README.md", f"Reproduce the {best_model['name']} pipeline with train.py\n")
-    save_text(artifact_dirs["code"] / "requirements.txt", "pandas\nnumpy\nscikit-learn\njoblib\n")
+    requirements_lines = ["pandas", "numpy", "scikit-learn", "joblib"]
+    lower_name = best_model["name"].lower()
+    if "xgboost" in lower_name:
+        requirements_lines.append("xgboost")
+    if "lightgbm" in lower_name:
+        requirements_lines.append("lightgbm")
+    if framework == "tensorflow":
+        requirements_lines.append("tensorflow-cpu")
+    if framework == "pytorch":
+        requirements_lines.append("torch")
+    save_text(artifact_dirs["code"] / "requirements.txt", "\n".join(requirements_lines) + "\n")
 
     return {
         "cleaned_dataset_path": cleaned_dataset_path,
