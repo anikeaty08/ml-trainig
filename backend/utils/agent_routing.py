@@ -9,6 +9,11 @@ DEFAULT_PROVIDER_URLS = {
     "lmstudio": "http://127.0.0.1:1234/v1",
     "openai_compatible": "http://127.0.0.1:4000/v1",
     "openai": "https://api.openai.com/v1",
+    "openai-codex": "https://api.openai.com/v1",
+    "anthropic": "https://api.anthropic.com/v1",
+    "google": "https://generativelanguage.googleapis.com",
+    "kimi": "https://api.moonshot.ai/v1",
+    "openrouter": "https://openrouter.ai/api/v1",
 }
 
 
@@ -107,7 +112,7 @@ def _normalize_auth_profiles(
                     "id": profile_id,
                     "label": label,
                     "provider": profile_provider,
-                    "auth_mode": str(item.get("auth_mode") or fallback_auth_mode or "local").strip(),
+                    "auth_mode": str(item.get("auth_mode") or fallback_auth_mode or "local").strip().replace("oauth", "browser_login"),
                     "base_url": str(item.get("base_url") or provider_urls.get(profile_provider) or "").strip(),
                     "api_key": str(item.get("api_key") or "").strip(),
                     "browser_session_hint": str(item.get("browser_session_hint") or "").strip(),
@@ -121,7 +126,7 @@ def _normalize_auth_profiles(
                 "id": f"default-{provider}",
                 "label": "default",
                 "provider": provider,
-                "auth_mode": fallback_auth_mode or "local",
+                "auth_mode": (fallback_auth_mode or "local").replace("oauth", "browser_login"),
                 "base_url": fallback_base_url or provider_urls.get(provider, ""),
                 "api_key": fallback_api_key,
                 "browser_session_hint": fallback_browser_session_hint,
@@ -162,7 +167,7 @@ def normalize_agent_settings(settings: dict[str, Any] | None) -> dict[str, Any]:
         allowlist = [_resolve_catalog_ref(part.strip(), alias_map) for part in str(raw_allowlist).split(",") if part.strip()]
 
     base_url = str(payload.get("base_url") or provider_urls.get(primary_route.provider) or "").strip()
-    auth_mode = str(payload.get("auth_mode") or "local").strip()
+    auth_mode = str(payload.get("auth_mode") or "local").strip().replace("oauth", "browser_login")
     api_key = str(payload.get("api_key") or "").strip()
     browser_session_hint = str(payload.get("browser_session_hint") or "").strip()
 

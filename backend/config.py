@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 
@@ -16,8 +17,8 @@ LOGS_DIR = DATA_DIR / "logs"
 BUILTIN_MODELS_DIR = BACKEND_DIR / "models_builtin"
 
 DB_PATH = BACKEND_DIR / "db.sqlite"
-APP_HOST = "127.0.0.1"
-APP_PORT = 38475
+APP_HOST = os.environ.get("ML_AGENT_HOST", "127.0.0.1")
+APP_PORT = int(os.environ.get("ML_AGENT_PORT", "38475"))
 API_HOST = APP_HOST
 API_PORT = APP_PORT
 FRONTEND_PORT = APP_PORT

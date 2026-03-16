@@ -81,10 +81,12 @@ export default function App() {
     return () => window.clearTimeout(timer);
   }, [configLoaded, settings]);
 
-  usePolling(async () => {
+  async function refreshJobs() {
     const data = await api.listJobs();
     startTransition(() => setJobs(data));
-  }, 3000);
+  }
+
+  usePolling(refreshJobs, 3000);
 
   const activeModelRef = useMemo(() => {
     if (settings.primary_model_ref) {
@@ -107,6 +109,7 @@ export default function App() {
               <Dashboard
                 availableModels={availableModels}
                 jobs={jobs}
+                onJobsRefresh={refreshJobs}
                 onSettingsChange={setSettings}
                 providerCatalog={providerCatalog}
                 settings={settings}

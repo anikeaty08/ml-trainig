@@ -7,7 +7,6 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-import httpx
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
@@ -19,7 +18,8 @@ from .jobs.queue import JobQueue
 from .jobs.state import JobStateManager
 from .modules.recommender import provider_catalog
 from .orchestrator import Orchestrator
-from .utils.agent_routing import auth_profile_chain, model_chain, normalize_agent_settings, resolve_agent_policy
+from .utils.agent_console import dispatch_provider_command, list_remote_models, onboard_text, resolve_console_command
+from .utils.agent_routing import normalize_agent_settings, resolve_agent_policy
 from .utils.helpers import read_json_file
 from .utils.storage import create_bundle_archive, delete_job_artifacts, save_upload
 from .utils.validators import validate_upload
@@ -212,13 +212,26 @@ def get_agent_providers() -> dict[str, Any]:
         "providers": provider_catalog(),
         "routing_style": "openclaw-like provider/model refs with fallback chain and provider auth rotation",
         "commands": [
+            "/help",
+            "/onboard [provider]",
             "/model",
             "/model list",
             "/model status",
+            "/model status --probe",
+            "/model scan",
             "/model set <provider/model>",
             "/model image <provider/model>",
             "/model fallback add <provider/model>",
             "/model fallback remove <provider/model>",
+            "/jobs",
+            "/job show <job_id>",
+            "/dataset summary",
+            "/dataset columns",
+            "/dataset head",
+            "/dataset stats",
+            "/analysis",
+            "/cleaning",
+            "/search <query>",
         ],
     }
 
@@ -239,39 +252,11 @@ def save_agent_config(payload: dict[str, Any]) -> dict[str, Any]:
 def get_agent_policy(payload: dict[str, Any]) -> dict[str, Any]:
     return resolve_agent_policy(payload)
 
-
-async def _list_remote_models(settings: dict[str, Any]) -> list[str]:
-    normalized = resolve_agent_policy(settings)
-    provider = normalized.get("provider", "")
-    profiles = auth_profile_chain(normalized, provider)
-
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        for profile in profiles:
-            base_url = profile.get("base_url", "")
-            headers: dict[str, str] = {"Authorization": f"Bearer {profile['api_key']}"} if profile.get("api_key") else {}
-            try:
-                if provider == "ollama":
-                    response = await client.get(f"{base_url.rstrip('/')}/api/tags")
-                    response.raise_for_status()
-                    return [item["name"] for item in response.json().get("models", [])]
-
-                if provider in {"lmstudio", "openai_compatible", "openai"}:
-                    url = f"{base_url.rstrip('/')}/models" if not base_url.endswith("/v1") else f"{base_url}/models"
-                    response = await client.get(url, headers=headers)
-                    response.raise_for_status()
-                    payload = response.json()
-                    return [item["id"] for item in payload.get("data", [])]
-            except Exception:
-                continue
-
-    return []
-
-
 @app.post("/api/agent/models")
 async def get_agent_models(payload: dict[str, Any]) -> dict[str, Any]:
     try:
         normalized = resolve_agent_policy(payload)
-        models = await _list_remote_models(normalized)
+        models = await list_remote_models(normalized)
     except Exception as exc:
         return {"models": [], "error": str(exc)}
     return {
@@ -280,95 +265,6 @@ async def get_agent_models(payload: dict[str, Any]) -> dict[str, Any]:
         "normalized": normalized,
     }
 
-
-def _rule_based_console_response(command: str, job_id: str | None) -> str:
-    normalized = command.lower().strip()
-    if normalized in {"help", "/help"}:
-        return "Commands: help, list jobs, latest result, cleaning summary, recommended model, provider status"
-    if normalized in {"list jobs", "/jobs"}:
-        jobs = database.list_jobs(limit=5)
-        if not jobs:
-            return "No jobs yet."
-        return "\n".join(f"{job['id']} | {job['status']} | {job['filename']}" for job in jobs)
-    if normalized in {"latest result", "recommended model", "/model"}:
-        jobs = database.list_jobs(limit=1)
-        if not jobs:
-            return "No completed jobs available yet."
-        latest_id = job_id or jobs[0]["id"]
-        result = database.get_job_result(latest_id)
-        if not result:
-            return "Latest job is not finished yet."
-        winner = result["comparison_json"][0]["name"] if result["comparison_json"] else "unknown"
-        metrics = result["metrics_json"]
-        return f"Best model: {winner}. Key metrics: {json.dumps(metrics)}"
-    if normalized in {"cleaning summary", "/cleaning"}:
-        jobs = database.list_jobs(limit=1)
-        if not jobs:
-            return "No jobs available yet."
-        latest_id = job_id or jobs[0]["id"]
-        result = database.get_job_result(latest_id)
-        if not result:
-            return "Latest job is not finished yet."
-        return json.dumps(result["summary_json"].get("cleaning", {}), indent=2)
-    if normalized in {"provider status", "/providers"}:
-        return json.dumps(provider_catalog(), indent=2)
-    return "Command not recognized. Type help."
-
-
-async def _dispatch_provider_command(command: str, settings: dict[str, Any]) -> str:
-    normalized = resolve_agent_policy(settings)
-
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        for route in model_chain(normalized, capability="chat"):
-            provider = route["provider"]
-            model = route["model"]
-            if not model:
-                continue
-            profiles = auth_profile_chain(normalized, provider)
-            for profile in profiles:
-                if profile.get("auth_mode") == "browser_login":
-                    continue
-                base_url = profile.get("base_url") or route["base_url"]
-                headers: dict[str, str] = {"Authorization": f"Bearer {profile['api_key']}"} if profile.get("api_key") else {}
-                try:
-                    if provider == "ollama":
-                        response = await client.post(
-                            f"{base_url.rstrip('/')}/api/chat",
-                            json={
-                                "model": model,
-                                "messages": [{"role": "user", "content": command}],
-                                "stream": False,
-                            },
-                        )
-                        response.raise_for_status()
-                        payload = response.json()
-                        content = payload.get("message", {}).get("content", "")
-                        if content:
-                            return f"[{route['ref']} via {profile['label']}]\n{content}"
-
-                    if provider in {"lmstudio", "openai_compatible", "openai"}:
-                        url = f"{base_url.rstrip('/')}/chat/completions" if not base_url.endswith("/v1") else f"{base_url}/chat/completions"
-                        response = await client.post(
-                            url,
-                            headers=headers,
-                            json={
-                                "model": model,
-                                "messages": [{"role": "user", "content": command}],
-                                "temperature": 0.2,
-                            },
-                        )
-                        response.raise_for_status()
-                        payload = response.json()
-                        choices = payload.get("choices", [])
-                        if choices:
-                            content = choices[0].get("message", {}).get("content", "")
-                            if content:
-                                return f"[{route['ref']} via {profile['label']}]\n{content}"
-                except Exception:
-                    continue
-    return ""
-
-
 @app.post("/api/agent/command")
 async def run_agent_command(payload: dict[str, Any]) -> dict[str, str]:
     command = str(payload.get("command", "")).strip()
@@ -376,14 +272,18 @@ async def run_agent_command(payload: dict[str, Any]) -> dict[str, str]:
     job_id = payload.get("job_id")
     if not command:
         raise HTTPException(status_code=400, detail="Command is required")
+    local_response = await resolve_console_command(command, settings, job_id)
+    if local_response:
+        return {"response": local_response}
+
     try:
         if settings:
-            response = await _dispatch_provider_command(command, settings)
+            response = await dispatch_provider_command(command, settings, job_id)
             if response:
                 return {"response": response}
     except Exception:
         pass
-    return {"response": _rule_based_console_response(command, job_id)}
+    return {"response": onboard_text(settings)}
 
 
 @app.get("/api/meta/runtime")

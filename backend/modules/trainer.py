@@ -12,6 +12,8 @@ from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import (
     ExtraTreesClassifier,
     ExtraTreesRegressor,
+    GradientBoostingClassifier,
+    GradientBoostingRegressor,
     HistGradientBoostingClassifier,
     HistGradientBoostingRegressor,
     RandomForestClassifier,
@@ -22,11 +24,12 @@ from sklearn.ensemble import (
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.impute import SimpleImputer
 from sklearn.inspection import permutation_importance
-from sklearn.linear_model import LinearRegression, LogisticRegression, Ridge
+from sklearn.linear_model import Lasso, LinearRegression, LogisticRegression, Ridge
 from sklearn.metrics import get_scorer
 from sklearn.model_selection import GridSearchCV, TimeSeriesSplit, learning_curve, train_test_split
 from sklearn.naive_bayes import GaussianNB
 from sklearn.neighbors import KNeighborsClassifier, KNeighborsRegressor
+from sklearn.neural_network import MLPClassifier, MLPRegressor
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.svm import SVC, SVR
@@ -43,6 +46,70 @@ class Candidate:
     estimator: Any
     params: dict[str, list[Any]]
     family: str
+
+
+def _optional_estimator(module_name: str, class_name: str) -> Any | None:
+    try:
+        module = __import__(module_name, fromlist=[class_name])
+        return getattr(module, class_name)
+    except Exception:
+        return None
+
+
+def _optional_boosting_candidates(task_type: str) -> list[Candidate]:
+    candidates: list[Candidate] = []
+
+    xgb_classifier = _optional_estimator("xgboost", "XGBClassifier")
+    xgb_regressor = _optional_estimator("xgboost", "XGBRegressor")
+    lgbm_classifier = _optional_estimator("lightgbm", "LGBMClassifier")
+    lgbm_regressor = _optional_estimator("lightgbm", "LGBMRegressor")
+
+    if task_type == "classification":
+        if xgb_classifier is not None:
+            candidates.append(
+                Candidate(
+                    "XGBoost",
+                    xgb_classifier(
+                        random_state=42,
+                        n_estimators=180,
+                        eval_metric="logloss",
+                        max_depth=6,
+                        learning_rate=0.08,
+                    ),
+                    {"model__n_estimators": [120, 180], "model__max_depth": [4, 6]},
+                    "boosting",
+                )
+            )
+        if lgbm_classifier is not None:
+            candidates.append(
+                Candidate(
+                    "LightGBM",
+                    lgbm_classifier(random_state=42, n_estimators=180, learning_rate=0.08),
+                    {"model__n_estimators": [120, 180], "model__num_leaves": [31, 63]},
+                    "boosting",
+                )
+            )
+    else:
+        if xgb_regressor is not None:
+            candidates.append(
+                Candidate(
+                    "XGBoost Regressor",
+                    xgb_regressor(random_state=42, n_estimators=180, max_depth=6, learning_rate=0.08),
+                    {"model__n_estimators": [120, 180], "model__max_depth": [4, 6]},
+                    "boosting",
+                )
+            )
+        if lgbm_regressor is not None:
+            candidates.append(
+                Candidate(
+                    "LightGBM Regressor",
+                    lgbm_regressor(random_state=42, n_estimators=180, learning_rate=0.08),
+                    {"model__n_estimators": [120, 180], "model__num_leaves": [31, 63]},
+                    "boosting",
+                )
+            )
+
+    return candidates
 
 
 def _dense_numeric_pipeline() -> Pipeline:
@@ -107,20 +174,37 @@ def _tabular_candidates(task_type: str) -> list[Candidate]:
             Candidate("Logistic Regression", LogisticRegression(max_iter=1000, class_weight="balanced"), {"model__C": [0.1, 1.0, 3.0]}, "baseline"),
             Candidate("Random Forest", RandomForestClassifier(random_state=42, class_weight="balanced"), {"model__n_estimators": [150, 250], "model__max_depth": [None, 12]}, "tree"),
             Candidate("Extra Trees", ExtraTreesClassifier(random_state=42, class_weight="balanced"), {"model__n_estimators": [150, 250], "model__max_depth": [None, 12]}, "tree"),
+            Candidate("Gradient Boosting", GradientBoostingClassifier(random_state=42), {"model__n_estimators": [100, 150], "model__learning_rate": [0.05, 0.1]}, "boosting"),
             Candidate("Hist Gradient Boosting", HistGradientBoostingClassifier(random_state=42), {"model__learning_rate": [0.05, 0.1], "model__max_depth": [None, 6]}, "boosting"),
             Candidate("SVM", SVC(probability=True, class_weight="balanced"), {"model__C": [0.5, 1.0, 3.0], "model__gamma": ["scale", "auto"]}, "kernel"),
+            Candidate(
+                "Neural Network (MLP)",
+                MLPClassifier(random_state=42, max_iter=300, early_stopping=True),
+                {"model__hidden_layer_sizes": [(128,), (128, 64)], "model__alpha": [0.0001, 0.001]},
+                "neural",
+            ),
             Candidate("KNN", KNeighborsClassifier(), {"model__n_neighbors": [5, 11, 21]}, "instance"),
             Candidate("Naive Bayes", GaussianNB(), {"model__var_smoothing": [1e-9, 1e-8, 1e-7]}, "probabilistic"),
+            *_optional_boosting_candidates("classification"),
         ]
 
     return [
         Candidate("Linear Regression", LinearRegression(), {}, "baseline"),
         Candidate("Ridge", Ridge(), {"model__alpha": [0.1, 1.0, 5.0]}, "baseline"),
+        Candidate("Lasso", Lasso(max_iter=5000), {"model__alpha": [0.001, 0.01, 0.1]}, "baseline"),
         Candidate("Random Forest Regressor", RandomForestRegressor(random_state=42), {"model__n_estimators": [150, 250], "model__max_depth": [None, 12]}, "tree"),
         Candidate("Extra Trees Regressor", ExtraTreesRegressor(random_state=42), {"model__n_estimators": [150, 250], "model__max_depth": [None, 12]}, "tree"),
+        Candidate("Gradient Boosting Regressor", GradientBoostingRegressor(random_state=42), {"model__n_estimators": [100, 150], "model__learning_rate": [0.05, 0.1]}, "boosting"),
         Candidate("Hist Gradient Boosting Regressor", HistGradientBoostingRegressor(random_state=42), {"model__learning_rate": [0.05, 0.1], "model__max_depth": [None, 6]}, "boosting"),
         Candidate("SVR", SVR(), {"model__C": [0.5, 1.0, 3.0], "model__gamma": ["scale", "auto"]}, "kernel"),
+        Candidate(
+            "Neural Network Regressor",
+            MLPRegressor(random_state=42, max_iter=300, early_stopping=True),
+            {"model__hidden_layer_sizes": [(128,), (128, 64)], "model__alpha": [0.0001, 0.001]},
+            "neural",
+        ),
         Candidate("KNN Regressor", KNeighborsRegressor(), {"model__n_neighbors": [5, 11, 21]}, "instance"),
+        *_optional_boosting_candidates("regression"),
     ]
 
 
@@ -128,9 +212,18 @@ def _text_candidates(task_type: str) -> list[Candidate]:
     if task_type == "classification":
         return [
             Candidate("Logistic Regression + TF-IDF", LogisticRegression(max_iter=1000, class_weight="balanced"), {"model__C": [0.5, 1.0, 3.0]}, "baseline"),
+            Candidate("Naive Bayes + TF-IDF", GaussianNB(), {"model__var_smoothing": [1e-9, 1e-8, 1e-7]}, "probabilistic"),
             Candidate("Random Forest + TF-IDF", RandomForestClassifier(random_state=42, class_weight="balanced"), {"model__n_estimators": [100, 150], "model__max_depth": [None, 12]}, "tree"),
+            Candidate("Gradient Boosting + TF-IDF", GradientBoostingClassifier(random_state=42), {"model__n_estimators": [100, 150], "model__learning_rate": [0.05, 0.1]}, "boosting"),
             Candidate("Hist Gradient Boosting + TF-IDF", HistGradientBoostingClassifier(random_state=42), {"model__learning_rate": [0.05, 0.1], "model__max_depth": [None, 6]}, "boosting"),
             Candidate("SVM + TF-IDF", SVC(probability=True, class_weight="balanced"), {"model__C": [0.5, 1.0, 2.0]}, "kernel"),
+            Candidate(
+                "Neural Network (MLP) + TF-IDF",
+                MLPClassifier(random_state=42, max_iter=250, early_stopping=True),
+                {"model__hidden_layer_sizes": [(256,), (256, 128)], "model__alpha": [0.0001, 0.001]},
+                "neural",
+            ),
+            *_optional_boosting_candidates("classification"),
         ]
 
     return [
@@ -146,8 +239,16 @@ def _timeseries_candidates() -> list[Candidate]:
         Candidate("Lagged Ridge Regression", Ridge(), {"model__alpha": [0.1, 1.0, 5.0]}, "baseline"),
         Candidate("Random Forest Regressor", RandomForestRegressor(random_state=42), {"model__n_estimators": [120, 180], "model__max_depth": [None, 12]}, "tree"),
         Candidate("Extra Trees Regressor", ExtraTreesRegressor(random_state=42), {"model__n_estimators": [120, 180], "model__max_depth": [None, 12]}, "tree"),
+        Candidate("Gradient Boosting Regressor", GradientBoostingRegressor(random_state=42), {"model__n_estimators": [100, 150], "model__learning_rate": [0.05, 0.1]}, "boosting"),
         Candidate("Hist Gradient Boosting Regressor", HistGradientBoostingRegressor(random_state=42), {"model__learning_rate": [0.05, 0.1], "model__max_depth": [None, 6]}, "boosting"),
+        Candidate(
+            "Neural Network Regressor",
+            MLPRegressor(random_state=42, max_iter=300, early_stopping=True),
+            {"model__hidden_layer_sizes": [(128,), (128, 64)], "model__alpha": [0.0001, 0.001]},
+            "neural",
+        ),
         Candidate("SVR", SVR(), {"model__C": [0.5, 1.0, 2.0]}, "kernel"),
+        *_optional_boosting_candidates("regression"),
     ]
 
 
@@ -164,6 +265,10 @@ def _evaluate(task_type: str, model: Pipeline, X: pd.DataFrame, y: pd.Series) ->
 
 
 def _feature_importance(model: Pipeline, X: pd.DataFrame, y: pd.Series) -> list[dict[str, Any]]:
+    if hasattr(model, "feature_importance_summary"):
+        return list(getattr(model, "feature_importance_summary"))
+    if not hasattr(model, "named_steps"):
+        return []
     preprocessor = model.named_steps["preprocessor"]
     estimator = model.named_steps["model"]
     feature_names = list(preprocessor.get_feature_names_out())
@@ -184,6 +289,10 @@ def _feature_importance(model: Pipeline, X: pd.DataFrame, y: pd.Series) -> list[
 
 
 def _learning_curves(task_type: str, model: Pipeline, X: pd.DataFrame, y: pd.Series, cv: Any) -> list[dict[str, Any]]:
+    if hasattr(model, "learning_curve_"):
+        return list(getattr(model, "learning_curve_"))
+    if not hasattr(model, "named_steps"):
+        return []
     if len(X) < 15:
         return []
     scorer = get_scorer(primary_metric_name(task_type))

@@ -2,41 +2,18 @@ from __future__ import annotations
 
 import asyncio
 import shlex
-import shutil
 import sys
 import uuid
 from pathlib import Path
 
 from . import database
-from .main import _dispatch_provider_command
+from .utils.agent_console import HELP_TEXT, dispatch_provider_command, format_policy, list_remote_models, onboard_text, resolve_console_command
+from .modules.recommender import provider_catalog
 from .orchestrator import Orchestrator
 from .jobs.state import JobStateManager
 from .utils.agent_routing import resolve_agent_policy
 from .utils.local_search import search_local_knowledge
 from .utils.storage import delete_job_artifacts, save_upload
-
-
-HELP_TEXT = """
-Commands
-  help
-  status
-  config show
-  config set provider <provider>
-  config set primary <provider/model>
-  config set image <provider/model>
-  config set fallback <provider/model,provider/model>
-  profile add <provider> <label> <auth_mode> <base_url> [api_key]
-  profile list
-  model list
-  jobs list
-  job show <job_id>
-  delete <job_id>
-  search <query>
-  train <path-to-dataset>
-  exit
-
-Any other text is sent to the configured agent model chain as a chat prompt.
-""".strip()
 
 
 def _print(text: str) -> None:
@@ -59,25 +36,14 @@ def _status_text() -> str:
     jobs = database.list_jobs(limit=5)
     return "\n".join(
         [
-            f"primary: {config.get('primary_model_ref') or 'unset'}",
-            f"image: {config.get('image_model_ref') or 'unset'}",
-            f"fallbacks: {', '.join(config.get('fallback_model_refs') or []) or 'none'}",
+            format_policy(config),
             f"recent jobs: {len(jobs)}",
         ]
     )
 
 
 def _model_list_text() -> str:
-    config = _load_config()
-    catalog_lines = [
-        f"{item.get('alias') or item['ref']} -> {item['ref']} [{item.get('capability', 'chat')}]"
-        for item in config.get("model_catalog", [])
-    ]
-    chain_lines = [
-        f"chat: {' -> '.join(route['ref'] for route in config.get('chat_chain', [])) or 'none'}",
-        f"image: {' -> '.join(route['ref'] for route in config.get('image_chain', [])) or 'none'}",
-    ]
-    return "\n".join(chain_lines + ["catalog:"] + (catalog_lines or ["none"]))
+    return format_policy(_load_config())
 
 
 def _add_profile(args: list[str]) -> str:
@@ -117,6 +83,21 @@ def _profile_list_text() -> str:
         f"{item['label']} | {item['provider']} | {item['auth_mode']} | {item.get('base_url') or 'default'}"
         for item in profiles
     )
+
+
+def _remove_profile(profile_id: str) -> str:
+    config = _load_config()
+    next_profiles = [item for item in config.get("auth_profiles", []) if item.get("id") != profile_id]
+    if len(next_profiles) == len(config.get("auth_profiles", [])):
+        return f"Profile not found: {profile_id}"
+    next_order = {
+        provider: [item for item in ids if item != profile_id]
+        for provider, ids in config.get("auth_order", {}).items()
+    }
+    config["auth_profiles"] = next_profiles
+    config["auth_order"] = next_order
+    _save_config(config)
+    return f"Removed profile {profile_id}."
 
 
 def _train_dataset(path_text: str) -> str:
@@ -172,7 +153,7 @@ def _job_show(job_id: str) -> str:
 
 async def _chat(prompt: str) -> str:
     config = _load_config()
-    response = await _dispatch_provider_command(prompt, config)
+    response = await dispatch_provider_command(prompt, config)
     return response or "No provider response. Check your configured model and auth profiles."
 
 
@@ -185,7 +166,7 @@ def _search(query: str) -> str:
 
 def _set_config(parts: list[str]) -> str:
     if len(parts) < 3:
-        return "Usage: config set <provider|primary|image|fallback> <value>"
+        return "Usage: config set <provider|primary|image|fallback|allow|auth> <value>"
     field = parts[1]
     value = " ".join(parts[2:])
     config = _load_config()
@@ -197,10 +178,25 @@ def _set_config(parts: list[str]) -> str:
         config["image_model_ref"] = value
     elif field == "fallback":
         config["fallback_model_refs"] = [item.strip() for item in value.split(",") if item.strip()]
+    elif field == "allow":
+        config["model_allowlist"] = [item.strip() for item in value.split(",") if item.strip()]
+    elif field == "auth":
+        config["auth_mode"] = value
     else:
         return f"Unknown config field: {field}"
     saved = _save_config(config)
     return f"Updated config.\nprimary: {saved['primary_model_ref']}\nimage: {saved['image_model_ref']}"
+
+
+def _provider_help() -> str:
+    return "\n\n".join(onboard_text(_load_config(), item["id"]) for item in provider_catalog())
+
+
+def _scan_models() -> str:
+    config = _load_config()
+    models = asyncio.run(list_remote_models(config))
+    provider = resolve_agent_policy(config)["provider"]
+    return "\n".join(f"{provider}/{model_name}" for model_name in models) or f"No remote models found for {provider}."
 
 
 def handle_command(line: str) -> str:
@@ -209,10 +205,16 @@ def handle_command(line: str) -> str:
         return ""
     command = parts[0].lower()
 
+    local_response = asyncio.run(resolve_console_command(line, _load_config()))
+    if local_response:
+        return local_response
+
     if command == "help":
         return HELP_TEXT
     if command == "status":
         return _status_text()
+    if command == "onboard":
+        return onboard_text(_load_config(), parts[1] if len(parts) > 1 else None)
     if command == "config":
         if len(parts) == 1 or parts[1] == "show":
             return _model_list_text()
@@ -223,8 +225,12 @@ def handle_command(line: str) -> str:
             return _profile_list_text()
         if len(parts) > 1 and parts[1] == "add":
             return _add_profile(parts[2:])
+        if len(parts) > 2 and parts[1] == "remove":
+            return _remove_profile(parts[2])
     if command == "model" and len(parts) > 1 and parts[1] == "list":
         return _model_list_text()
+    if command == "model" and len(parts) > 1 and parts[1] == "scan":
+        return _scan_models()
     if command == "jobs" and len(parts) > 1 and parts[1] == "list":
         jobs = database.list_jobs(limit=20)
         return "\n".join(f"{job['id']} | {job['status']} | {job['filename']}" for job in jobs) or "No jobs yet."

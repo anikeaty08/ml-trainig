@@ -1,40 +1,31 @@
 from __future__ import annotations
 
-import os
 import subprocess
 import sys
-import threading
 import time
 import webbrowser
-from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.request import urlopen
 
+from backend.config import APP_HOST, APP_PORT
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 FRONTEND_BUILD_DIR = ROOT_DIR / "frontend" / "build"
+APP_ORIGIN = f"http://{APP_HOST}:{APP_PORT}"
 
 
 def start_backend() -> subprocess.Popen[str]:
     return subprocess.Popen(
-        [sys.executable, "-m", "uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"],
+        [sys.executable, "-m", "uvicorn", "backend.main:app", "--host", APP_HOST, "--port", str(APP_PORT)],
         cwd=ROOT_DIR,
     )
-
-
-def start_frontend_server() -> ThreadingHTTPServer:
-    os.chdir(FRONTEND_BUILD_DIR)
-    server = ThreadingHTTPServer(("0.0.0.0", 3000), SimpleHTTPRequestHandler)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    return server
 
 
 def wait_for_backend(timeout_seconds: int = 30) -> None:
     started = time.time()
     while time.time() - started < timeout_seconds:
         try:
-            with urlopen("http://127.0.0.1:8000/api/health", timeout=2) as response:
+            with urlopen(f"{APP_ORIGIN}/api/health", timeout=2) as response:
                 if response.status == 200:
                     return
         except Exception:
@@ -48,9 +39,8 @@ if __name__ == "__main__":
     backend_process = start_backend()
     try:
         wait_for_backend()
-        frontend_server = start_frontend_server()
-        webbrowser.open("http://localhost:3000")
+        webbrowser.open(APP_ORIGIN)
         backend_process.wait()
     finally:
-        if "frontend_server" in locals():
-            frontend_server.shutdown()
+        if backend_process.poll() is None:
+            backend_process.terminate()
