@@ -137,6 +137,7 @@ def _tensorflow_results(
     train_val_y: pd.Series,
     task_type: str,
     dataset_type: str,
+    progress_callback: Any | None = None,
 ) -> list[dict[str, Any]]:
     tensorflow = _optional_module("tensorflow")
     if tensorflow is None:
@@ -180,7 +181,19 @@ def _tensorflow_results(
         return keras.Sequential(layers)
 
     results: list[dict[str, Any]] = []
-    for spec in _architecture_specs(dataset_type):
+    specs = _architecture_specs(dataset_type)
+    for index, spec in enumerate(specs, start=1):
+        if progress_callback:
+            progress_callback(
+                f"Trying TensorFlow / Keras network: {spec['suffix']}",
+                {
+                    "current_model": f"TensorFlow / Keras Dense Network ({dataset_type})",
+                    "architecture": spec["hidden_layers"],
+                    "training_strategy": f"{spec['activation']} activation, dropout {spec['dropout']}",
+                    "deep_model_index": index,
+                    "deep_model_total": len(specs),
+                },
+            )
         started_at = time.perf_counter()
         model = build_model(X_train_array.shape[1], spec)
         model.compile(optimizer="adam", loss=loss_name, metrics=metrics)
@@ -278,6 +291,7 @@ def _pytorch_results(
     train_val_y: pd.Series,
     task_type: str,
     dataset_type: str,
+    progress_callback: Any | None = None,
 ) -> list[dict[str, Any]]:
     torch = _optional_module("torch")
     if torch is None:
@@ -350,7 +364,19 @@ def _pytorch_results(
         return model, curve
 
     results: list[dict[str, Any]] = []
-    for spec in _architecture_specs(dataset_type):
+    specs = _architecture_specs(dataset_type)
+    for index, spec in enumerate(specs, start=1):
+        if progress_callback:
+            progress_callback(
+                f"Trying PyTorch network: {spec['suffix']}",
+                {
+                    "current_model": f"PyTorch Dense Network ({dataset_type})",
+                    "architecture": spec["hidden_layers"],
+                    "training_strategy": f"{spec['activation']} activation, dropout {spec['dropout']}",
+                    "deep_model_index": index,
+                    "deep_model_total": len(specs),
+                },
+            )
         started_at = time.perf_counter()
         validation_model, curve = train_once(X_train_array, y_train_encoded, 1 if class_count <= 2 else class_count, spec)
         validation_wrapper = TorchFeatureModel(
@@ -432,6 +458,7 @@ def train_optional_deep_models(
     train_val_y: pd.Series,
     task_type: str,
     dataset_type: str,
+    progress_callback: Any | None = None,
 ) -> list[dict[str, Any]]:
     results: list[dict[str, Any]] = []
     results.extend(
@@ -447,6 +474,7 @@ def train_optional_deep_models(
             train_val_y=train_val_y,
             task_type=task_type,
             dataset_type=dataset_type,
+            progress_callback=progress_callback,
         )
     )
     results.extend(
@@ -462,6 +490,7 @@ def train_optional_deep_models(
             train_val_y=train_val_y,
             task_type=task_type,
             dataset_type=dataset_type,
+            progress_callback=progress_callback,
         )
     )
     return results

@@ -48,6 +48,8 @@ export default function Processing() {
             <p>
               Completed models: {status.completed_models} / {status.total_models}
             </p>
+            {status.training_strategy ? <p>Strategy: {status.training_strategy}</p> : null}
+            {status.architecture ? <p>Layers: {Array.isArray(status.architecture) ? status.architecture.join(" -> ") : status.architecture}</p> : null}
           </div>
         ) : null}
         {status.error_message ? <p className="error-text">{status.error_message}</p> : null}

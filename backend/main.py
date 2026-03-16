@@ -20,6 +20,7 @@ from .modules.recommender import provider_catalog
 from .orchestrator import Orchestrator
 from .utils.agent_console import dispatch_provider_command, list_remote_models, onboard_text, resolve_console_command
 from .utils.agent_routing import normalize_agent_settings, resolve_agent_policy
+from .utils.dataset_sources import download_dataset_source
 from .utils.helpers import read_json_file
 from .utils.storage import create_bundle_archive, delete_job_artifacts, save_upload
 from .utils.validators import validate_upload
@@ -161,6 +162,30 @@ async def submit_job(
         normalized_settings["model"],
     )
     state_manager.set_state(job_id, {"job_id": job_id, "stage": "queued", "progress": 0, "message": "Job queued"})
+    job_queue.enqueue(job_id, str(upload_path))
+    return JSONResponse({"job_id": job_id, "status": "queued"})
+
+
+@app.post("/api/jobs/submit-url")
+async def submit_job_from_url(payload: dict[str, Any]) -> JSONResponse:
+    dataset_url = str(payload.get("url", "")).strip()
+    provider = str(payload.get("provider", "ollama"))
+    model = str(payload.get("model", ""))
+    settings = payload.get("settings") or {}
+    if not dataset_url:
+        raise HTTPException(status_code=400, detail="Dataset URL is required")
+
+    job_id = uuid.uuid4().hex[:12]
+    state_manager.set_state(job_id, {"job_id": job_id, "stage": "fetching_source", "progress": 2, "message": "Fetching dataset from URL"})
+    try:
+        upload_path = download_dataset_source(job_id, dataset_url)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    validate_upload(upload_path.name, SUPPORTED_FILE_EXTENSIONS)
+    normalized_settings = normalize_agent_settings({**settings, "provider": provider, "model": model})
+    database.create_job(job_id, upload_path.name, str(upload_path), normalized_settings["provider"], normalized_settings["model"])
+    state_manager.set_state(job_id, {"job_id": job_id, "stage": "queued", "progress": 5, "message": "Remote dataset downloaded and queued"})
     job_queue.enqueue(job_id, str(upload_path))
     return JSONResponse({"job_id": job_id, "status": "queued"})
 

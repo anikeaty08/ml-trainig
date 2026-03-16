@@ -374,10 +374,13 @@ def _run_candidate_searches(
 
     for index, candidate in enumerate(candidates, start=1):
         if progress_callback:
+            extra = {"current_model": candidate.name, "completed_models": index - 1, "total_models": len(candidates)}
+            if candidate.family == "neural":
+                extra["training_strategy"] = "Exploring multiple hidden-layer layouts, activations, and regularization settings"
             progress_callback(
                 f"Training {candidate.name}",
                 55 + int(((index - 1) / max(len(candidates), 1)) * 25),
-                {"current_model": candidate.name, "completed_models": index - 1, "total_models": len(candidates)},
+                extra,
             )
         started_at = time.perf_counter()
         search = GridSearchCV(
@@ -622,6 +625,11 @@ def _train_tabular_or_text(
             train_val_y=train_val_y,
             task_type=task_type,
             dataset_type=dataset_type,
+            progress_callback=(
+                (lambda message, extra=None: progress_callback(message, 82, extra))
+                if progress_callback
+                else None
+            ),
         )
     )
     return _package_results(
@@ -702,6 +710,11 @@ def _train_timeseries(
             train_val_y=train_val_y,
             task_type="regression",
             dataset_type="timeseries",
+            progress_callback=(
+                (lambda message, extra=None: progress_callback(message, 82, extra))
+                if progress_callback
+                else None
+            ),
         )
     )
 

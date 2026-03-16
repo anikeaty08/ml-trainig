@@ -54,6 +54,16 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ command, settings, job_id: jobId })
     }),
+  submitJobFromUrl: ({ url, settings }) =>
+    request("/api/jobs/submit-url", {
+      method: "POST",
+      body: JSON.stringify({
+        url,
+        provider: settings.provider || "",
+        model: settings.primary_model_ref || settings.model || "",
+        settings: settings || {}
+      })
+    }),
   submitJob: ({ file, settings }) => {
     const formData = new FormData();
     formData.append("file", file);

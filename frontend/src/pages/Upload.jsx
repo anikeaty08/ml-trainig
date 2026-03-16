@@ -6,13 +6,14 @@ import { api } from "../services/api";
 export default function Upload({ settings }) {
   const navigate = useNavigate();
   const [file, setFile] = useState(null);
+  const [datasetUrl, setDatasetUrl] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
-  async function handleSubmit(event) {
+  async function handleFileSubmit(event) {
     event.preventDefault();
     if (!file) {
-      setError("Choose a CSV or TSV file first.");
+      setError("Choose a dataset file first.");
       return;
     }
 
@@ -20,6 +21,25 @@ export default function Upload({ settings }) {
     setError("");
     try {
       const payload = await api.submitJob({ file, settings });
+      navigate(`/processing/${payload.job_id}`);
+    } catch (submitError) {
+      setError(submitError.message);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleUrlSubmit(event) {
+    event.preventDefault();
+    if (!datasetUrl.trim()) {
+      setError("Paste a dataset URL first.");
+      return;
+    }
+
+    setSubmitting(true);
+    setError("");
+    try {
+      const payload = await api.submitJobFromUrl({ url: datasetUrl.trim(), settings });
       navigate(`/processing/${payload.job_id}`);
     } catch (submitError) {
       setError(submitError.message);
@@ -39,7 +59,7 @@ export default function Upload({ settings }) {
         </p>
       </section>
 
-      <form className="card upload-card" onSubmit={handleSubmit}>
+      <form className="card upload-card" onSubmit={handleFileSubmit}>
         <label className="upload-zone">
           <input
             accept=".csv,.tsv,.txt,.zip"
@@ -68,6 +88,24 @@ export default function Upload({ settings }) {
         {error ? <p className="error-text">{error}</p> : null}
         <button className="button" disabled={submitting} type="submit">
           {submitting ? "Submitting..." : "Start autonomous run"}
+        </button>
+      </form>
+
+      <form className="card upload-card" onSubmit={handleUrlSubmit}>
+        <p className="eyebrow">Dataset URL</p>
+        <h3>Pull from URL or Kaggle link</h3>
+        <p>Paste a direct dataset URL or a Kaggle dataset/competition link. The app will download it locally, then run the same autonomous pipeline.</p>
+        <label>
+          Dataset URL
+          <input
+            onChange={(event) => setDatasetUrl(event.target.value)}
+            placeholder="https://... or https://www.kaggle.com/datasets/..."
+            type="url"
+            value={datasetUrl}
+          />
+        </label>
+        <button className="button secondary" disabled={submitting} type="submit">
+          {submitting ? "Fetching..." : "Fetch and train"}
         </button>
       </form>
     </div>
