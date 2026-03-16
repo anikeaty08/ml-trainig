@@ -11,8 +11,6 @@ import Upload from "./pages/Upload";
 import { usePolling } from "./hooks/usePolling";
 import { api } from "./services/api";
 
-const SETTINGS_KEY = "ml-agent-provider-settings";
-
 const defaultSettings = {
   provider: "ollama",
   auth_mode: "local",
@@ -43,39 +41,27 @@ const defaultSettings = {
   api_key: ""
 };
 
-function loadSettings() {
-  try {
-    const saved = { ...defaultSettings, ...JSON.parse(window.localStorage.getItem(SETTINGS_KEY) || "{}") };
-    if (!saved.primary_model_ref && saved.model) {
-      saved.primary_model_ref = saved.model.includes("/") ? saved.model : `${saved.provider}/${saved.model}`;
-    }
-    if (!saved.base_url) {
-      saved.base_url = defaultSettings.base_url;
-    }
-    return saved;
-  } catch (error) {
-    return defaultSettings;
-  }
-}
-
 export default function App() {
   const [jobs, setJobs] = useState([]);
   const [availableModels, setAvailableModels] = useState({ builtin_models: [], candidate_families: [] });
   const [providerCatalog, setProviderCatalog] = useState([]);
-  const [settings, setSettings] = useState(loadSettings);
-
-  useEffect(() => {
-    window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
-  }, [settings]);
+  const [settings, setSettings] = useState(defaultSettings);
+  const [configLoaded, setConfigLoaded] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
 
     async function loadMeta() {
-      const [models, providers] = await Promise.all([api.getAvailableModels(), api.getProviders()]);
+      const [models, providers, storedConfig] = await Promise.all([
+        api.getAvailableModels(),
+        api.getProviders(),
+        api.getStoredConfig()
+      ]);
       if (!cancelled) {
         setAvailableModels(models);
         setProviderCatalog(providers.providers || []);
+        setSettings({ ...defaultSettings, ...storedConfig });
+        setConfigLoaded(true);
       }
     }
 
@@ -84,6 +70,16 @@ export default function App() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (!configLoaded) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      api.saveStoredConfig(settings).catch(() => {});
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [configLoaded, settings]);
 
   usePolling(async () => {
     const data = await api.listJobs();

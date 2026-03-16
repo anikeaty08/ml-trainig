@@ -8,7 +8,7 @@ from typing import Any
 
 import pandas as pd
 
-from ..config import REPORTS_DIR, UPLOADS_DIR, ensure_directories
+from ..config import LOGS_DIR, REPORTS_DIR, UPLOADS_DIR, ensure_directories
 
 
 def save_upload(job_id: str, filename: str, content: bytes) -> Path:
@@ -71,3 +71,14 @@ def create_bundle_archive(base_dir: Path) -> Path:
     archive_base = base_dir.parent / f"{base_dir.name}_bundle"
     archive_path = shutil.make_archive(str(archive_base), "zip", root_dir=base_dir)
     return Path(archive_path)
+
+
+def delete_job_artifacts(job: dict[str, Any]) -> None:
+    upload_dir = UPLOADS_DIR / job["id"]
+    report_dir = REPORTS_DIR / job["id"]
+    log_path = LOGS_DIR / f"{job['id']}.log"
+    for path in (upload_dir, report_dir):
+        if path.exists():
+            shutil.rmtree(path, ignore_errors=True)
+    if log_path.exists():
+        log_path.unlink(missing_ok=True)

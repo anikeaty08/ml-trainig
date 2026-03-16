@@ -1,4 +1,6 @@
-const API_URL = process.env.REACT_APP_API_URL || "http://localhost:8000";
+const API_URL =
+  process.env.REACT_APP_API_URL ||
+  (typeof window !== "undefined" ? window.location.origin : "http://127.0.0.1:38475");
 
 async function request(path, options = {}) {
   const response = await fetch(`${API_URL}${path}`, {
@@ -24,9 +26,19 @@ async function request(path, options = {}) {
 export const api = {
   getAvailableModels: () => request("/api/models/available"),
   listJobs: () => request("/api/jobs"),
+  deleteJob: (jobId) =>
+    request(`/api/jobs/${jobId}`, {
+      method: "DELETE"
+    }),
   getJob: (jobId) => request(`/api/jobs/${jobId}`),
   getJobResults: (jobId) => request(`/api/jobs/${jobId}/results`),
   getProviders: () => request("/api/agent/providers"),
+  getStoredConfig: () => request("/api/agent/config"),
+  saveStoredConfig: (settings) =>
+    request("/api/agent/config", {
+      method: "PUT",
+      body: JSON.stringify(settings)
+    }),
   getAgentPolicy: (settings) =>
     request("/api/agent/policy", {
       method: "POST",

@@ -21,7 +21,7 @@ from .modules.recommender import provider_catalog
 from .orchestrator import Orchestrator
 from .utils.agent_routing import auth_profile_chain, model_chain, normalize_agent_settings, resolve_agent_policy
 from .utils.helpers import read_json_file
-from .utils.storage import create_bundle_archive, save_upload
+from .utils.storage import create_bundle_archive, delete_job_artifacts, save_upload
 from .utils.validators import validate_upload
 
 
@@ -106,6 +106,7 @@ def delete_job(job_id: str) -> dict[str, str]:
         raise HTTPException(status_code=404, detail="Job not found")
     if job["status"] == "processing":
         raise HTTPException(status_code=400, detail="Processing jobs cannot be deleted in this MVP")
+    delete_job_artifacts(job)
     database.execute("DELETE FROM jobs WHERE id = ?", (job_id,))
     database.execute("DELETE FROM job_logs WHERE job_id = ?", (job_id,))
     database.execute("DELETE FROM job_results WHERE job_id = ?", (job_id,))
